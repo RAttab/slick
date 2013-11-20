@@ -9,6 +9,26 @@
 namespace slick {
 
 /******************************************************************************/
+/* GUARD                                                                      */
+/******************************************************************************/
+
+struct FdGuard
+{
+    FdGuard(int fd) : fd(fd) {}
+    ~FdGuard() { if (fd >= 0) close(fd); }
+
+    int release()
+    {
+        int old = fd;
+        fd = -1;
+        return old;
+    }
+
+private:
+    int fd;
+};
+
+/******************************************************************************/
 /* PASSIVE SOCKETS                                                            */
 /******************************************************************************/
 
@@ -21,6 +41,10 @@ struct PassiveSockets
     PassiveSockets& operator=(const PassiveSockets&) = delete;
 
     const std::vector<int>& fds() { return fds; }
+    bool test(int fd)
+    {
+        return find(fd.begin(), fd.end(), fd) != fd.end();
+    };
 
 private:
     std::vector<int> fds;

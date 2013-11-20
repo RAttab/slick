@@ -31,7 +31,7 @@ struct EndpointProvider
     int fd() const { return pollFd; }
 
     void publish(const std::string& endpoint);
-    void listen();
+    void poll();
     void shutdown();
 
     std::function<void(const ClientHandle& h)> onNewClient;
@@ -59,10 +59,34 @@ private:
     void disconnectClient();
     void processMessage(int fd);
 
+    void sendHeartbeats();
+    void sendHeader(int fd):
+
+
     std::string name;
     int pollFd;
     PassiveSockets sockets;
-    std::vector<ClientHandle> clients;
+
+    struct ClientState
+    {
+        ClientState() :
+            addr({ 0 }), addrlen(sizeof addr),
+            lastHeartbeatRecv(-1), lastHearbeatSent(-1), missedHeartbeats(0),
+            rtt(-1), bytesSent(0), bytesRecv(0)
+        {}
+
+        struct sockaddr addr;
+        socklen_t addrlen;
+
+        double lastHeartbeatRecv;
+        double lastHeartbeatSent;
+
+        double rtt;
+        size_t bytesSent;
+        size_t bytesRecv;
+    };
+
+    std::unordered_map<ClientHandle, ClientState> clients;
 };
 
 
