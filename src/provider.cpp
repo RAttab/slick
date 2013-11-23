@@ -23,7 +23,7 @@ namespace slick {
 
 
 EndpointProvider(std::string name, const char* port) :
-    name(std::move(name)), sockets(port, O_NONBLOCK)
+    name(std::move(name)), sockets(port, O_NONBLOCK), pollThread(0)
 {
     pollFd = epoll_create(1);
     SLICK_CHECK_ERRNO(pollFd != -1, "epoll_create");
@@ -56,22 +56,31 @@ publish(const std::string& endpoint)
 
 void
 EndpointProvider::
-send(const ClientHandle& client, Message&& msg)
+send(const ClientHandle& h, Message&& msg)
 {
+    assert(threadId() == pollThread);
 
+    auto it = clients.find(h);
+    assert(it != clients.end());
+    it->send(std::move(msg)):
 }
 
 void
 EndpointProvider::
 broadcast(Message&& msg)
 {
+    assert(threadId() == pollThread);
 
+    for (auto& client : clients)
+        client.send(std::move(msg));
 }
 
 void
 EndpointProvider::
 poll()
 {
+    pollThread = threadId();
+
     enum { MaxEvents = 10 };
     struct epoll_event events[MaxEvents];
 
@@ -91,7 +100,9 @@ poll()
 
             if (sockets.test(ev.data.fd))
                 connectClient(ev.data.fd);
-            else processMessage(ev.data.fd);
+            else if (ev.events == EPOLLOUT)
+                sendMessage(ev.data.fd);
+            else recvMessage(ev.data.fd);
         }
 
         double now = wall();
@@ -100,6 +111,8 @@ poll()
             nextHeartbeat = now + heartbeatFreq;
         }
     }
+
+    pollThread = 0;
 }
 
 void
@@ -115,10 +128,8 @@ connectClient(int fd)
 
         FdGuard(fd);
 
-        sendHeader(fd);
-
         struct epoll_event ev = { 0 };
-        ev.events = EPOLLIN | EPOLLET;
+        ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
         ev.events(pollFd, fd, &ev);
 
         int ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
@@ -127,6 +138,7 @@ connectClient(int fd)
         fd.release();
 
         clients[fd] = std::move(client);
+        sendHeader(fd);
     }
 }
 
@@ -139,7 +151,7 @@ disconnectClient()
 
 void
 EndpointProvider::
-processMessage(int fd)
+recvMessage(int fd)
 {
     auto it = clients.find(fd);
     assert(it != clients.end());
@@ -150,9 +162,27 @@ processMessage(int fd)
 
 void
 EndpointProvider::
+send(const ClientHandle& client, Message&& msg)
+{
+
+}
+
+void
+EndpointProvider::
+sendMessage(int fd)
+{
+    auto it = clients.find(fd);
+    assert(it != clients.end());
+    it->flushQueue();
+}
+
+
+void
+EndpointProvider::
 sendHeartbeats()
 {
-    Message heartbeat;
+    static const char msg[] = "HEARTBEAT";
+    static const size_t length = sizeof msg;
 
 }
 
@@ -160,7 +190,49 @@ void
 EndpointProvider::
 sendHeader(int fd)
 {
+    static const char msg[] = "";
+    static const size_t length = sizeof msg;
 
+    auto it = clients.find(fd);
+    assert(it != clients.end());
+    it->send(Message(msg, length));
+}
+
+void
+EndpointProvider::ClientState::
+send(Message&& msg)
+{
+    if (!writable) {
+        sendQueue.emplace_back(std::move(msg));
+        return;
+    }
+
+    ssize_t sent = send(fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
+    if (sent >= 0) {
+        assert(sent == msg.size());
+        return;
+    }
+
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        writable = false;
+        sendQueue.emplace_back(std::move(msg));
+        return;
+    }
+
+    else if (errno == ECONNRESET || errno == EPIPE) disconnect(fd);
+
+    SLICK_CHECK_ERRNO(sent >= 0, "send.header");
+
+    bytesSent += sent;
+}
+
+void
+EndpointProvider::ClientState::
+flushQueue()
+{
+    writable = true;
+    std::vector<Message> queue = std::move(sendQueue);
+    for (msg& : queue) send(std::move(msg));
 }
 
 

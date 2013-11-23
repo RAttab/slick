@@ -34,13 +34,13 @@ struct EndpointProvider
     void poll();
     void shutdown();
 
-    std::function<void(const ClientHandle& h)> onNewClient;
-    std::function<void(const ClientHandle& h)> onLostClient;
+    std::function<void(ClientHandle h)> onNewClient;
+    std::function<void(ClientHandle h)> onLostClient;
 
-    std::function<void(const ClientHandle& h, Message&& m)> onMessage;
+    std::function<void(ClientHandle h, Message&& m)> onMessage;
 
-    void send(const ClientHandle& client, Message&& msg);
-    void send(const ClientHandle& client, const Message& msg)
+    void send(ClientHandle client, Message&& msg);
+    void send(ClientHandle client, const Message& msg)
     {
         send(client, Message(msg));
     }
@@ -57,22 +57,25 @@ private:
 
     void connectClient();
     void disconnectClient();
-    void processMessage(int fd);
+
+    void recvMessage(int fd);
+    void sendMessage(int fd);
 
     void sendHeartbeats();
     void sendHeader(int fd):
 
-
     std::string name;
     int pollFd;
     PassiveSockets sockets;
+    size_t pollThread;
 
     struct ClientState
     {
         ClientState() :
             addr({ 0 }), addrlen(sizeof addr),
-            lastHeartbeatRecv(-1), lastHearbeatSent(-1), missedHeartbeats(0),
-            rtt(-1), bytesSent(0), bytesRecv(0)
+            lastHeartbeatRecv(-1), lastHearbeatSent(-1),
+            rtt(-1), bytesSent(0), bytesRecv(0),
+            writable(true)
         {}
 
         struct sockaddr addr;
@@ -84,6 +87,12 @@ private:
         double rtt;
         size_t bytesSent;
         size_t bytesRecv;
+
+        bool writable;
+        std::vector<Message> sendQueue;
+
+        void send(Message&& msg);
+        void flushQueue();
     };
 
     std::unordered_map<ClientHandle, ClientState> clients;

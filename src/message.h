@@ -15,30 +15,49 @@ namespace slick {
 /* MESSAGE                                                                    */
 /******************************************************************************/
 
+struct TakeOwnership {};
+
 struct Message
 {
-    Message(size_t size, const uint8_t* bytes) : 
-        size(size), bytes(bytes), owned(false)
+
+    Message() : size_(0), bytes_(nullptr) {}
+
+    Message(const uint8_t* src, size_t size) :
+        size_(size), bytes_(malloc(size))
+    {
+        memcpy(src, bytes_, size);
+    }
+
+    Message(TakeOwnership, const uint8_t* src, size_t size) :
+        size_(size), bytes_(src)
     {}
 
-    Message(size_t size, uint8_t* src) : 
-        size(size), 
-        bytes(malloc(size)),
-        owned(true)
+    Message(const Message& other)
     {
-        std::memcpy(src, bytes, size);
+        *this = std::move(Message(other.bytes_, other.size_));
+    }
+
+    const Message& operator= (const Message& other)
+    {
+        *this = std::move(Message(other.bytes_, other.size_));
     }
 
     ~Message()
     {
-        if (owned) free(bytes);
+        free(bytes_);
     }
 
+    Message&& toChunkedHttp() const
+    {
+
+    }
+
+    const uint8_t* bytes() const { return bytes_; }
+    size_t size() const { return size_; }
 
 private:
-    size_t size;
-    const uint8_t* bytes;
-    bool owned;
+    size_t size_;
+    const uint8_t* bytes_;
 };
 
 } // slick
