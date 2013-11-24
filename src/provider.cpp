@@ -126,17 +126,22 @@ poll()
 
         for (size_t i = 0; i < n; ++i) {
             const auto& ev = events[i];
-            SLICK_CHECK_ERRNO(ev.events != EPOLLERR, "epoll_wait.EPOLLERR");
-            SLICK_CHECK_ERRNO(ev.events != EPOLLHUP, "epoll_wait.EPOLLHUP");
+            SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
 
-            if (sockets.test(ev.data.fd))
+            if (sockets.test(ev.data.fd)) {
+                std::assert(ev.events == EPOLLIN);
                 connectClient(ev.data.fd);
+                continue;
+            }
 
-            else if (ev.events == EPOLLOUT)
-                sendMessage(ev.data.fd);
+            if (ev.events & EPOLLIN) recvMessage(ev.data.fd);
 
-            else if (ev.events == EPOLLIN)
-                recvMessage(ev.data.fd);
+            if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
+                disconnectClient(ev.data.fd);
+                continue;
+            }
+
+            if (ev.events & EPOLLOUT) sendMessage(ev.data.fd);
         }
 
         double now = wall();
