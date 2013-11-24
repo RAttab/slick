@@ -29,4 +29,13 @@ namespace slick {
 
 size_t threadId();
 
+
+/******************************************************************************/
+/* BIT OPS                                                                    */
+/******************************************************************************/
+
+inline size_t clz(unsigned x)           { return __builtin_clz(x); }
+inline size_t clz(unsigned long x)      { return __builtin_clzl(x); }
+inline size_t clz(unsigned long long x) { return __builtin_clzll(x); }
+
 } // namespace slick

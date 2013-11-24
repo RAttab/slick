@@ -58,21 +58,27 @@ void
 EndpointProvider::
 send(const ClientHandle& h, Message&& msg)
 {
-    assert(threadId() == pollThread);
+    std::assert(threadId() == pollThread);
 
     auto it = clients.find(h);
-    assert(it != clients.end());
-    it->send(std::move(msg)):
+    std::assert(it != clients.end());
+
+    if (!it->send(toChunkedHttp(msg)))
+        disconnect(it->fd);
 }
 
 void
 EndpointProvider::
 broadcast(Message&& msg)
 {
-    assert(threadId() == pollThread);
+    std::assert(threadId() == pollThread);
 
-    for (auto& client : clients)
-        client.send(std::move(msg));
+    Message httpMsg = toChunkedHttp(msg);
+
+    for (auto& client : clients) {
+        if(!client.send(httpMsg))
+            disconnect(client.fd);
+    }
 }
 
 void
@@ -100,9 +106,12 @@ poll()
 
             if (sockets.test(ev.data.fd))
                 connectClient(ev.data.fd);
+
             else if (ev.events == EPOLLOUT)
                 sendMessage(ev.data.fd);
-            else recvMessage(ev.data.fd);
+
+            else if (ev.events == EPOLLIN)
+                recvMessage(ev.data.fd);
         }
 
         double now = wall();
@@ -154,16 +163,8 @@ EndpointProvider::
 recvMessage(int fd)
 {
     auto it = clients.find(fd);
-    assert(it != clients.end());
+    std::assert(it != clients.end());
 
-
-}
-
-
-void
-EndpointProvider::
-send(const ClientHandle& client, Message&& msg)
-{
 
 }
 
@@ -172,7 +173,7 @@ EndpointProvider::
 sendMessage(int fd)
 {
     auto it = clients.find(fd);
-    assert(it != clients.end());
+    std::assert(it != clients.end());
     it->flushQueue();
 }
 
@@ -194,36 +195,59 @@ sendHeader(int fd)
     static const size_t length = sizeof msg;
 
     auto it = clients.find(fd);
-    assert(it != clients.end());
+    std::assert(it != clients.end());
     it->send(Message(msg, length));
 }
 
-void
-EndpointProvider::ClientState::
-send(Message&& msg)
+
+/******************************************************************************/
+/* CLIENT STATE                                                               */
+/******************************************************************************/
+
+namespace {
+
+template<typename Msg>
+bool send(EndpointProvider::ClientState& state, Msg&& msg)
 {
-    if (!writable) {
-        sendQueue.emplace_back(std::move(msg));
+    if (!state.writable) {
+        state.sendQueue.emplace_back(std::forward(msg));
         return;
     }
 
-    ssize_t sent = send(fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
+    ssize_t sent = send(state.fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
     if (sent >= 0) {
-        assert(sent == msg.size());
+        std::assert(sent == msg.size());
         return;
     }
 
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        writable = false;
-        sendQueue.emplace_back(std::move(msg));
+        state.writable = false;
+        state.sendQueue.emplace_back(std::forward(msg));
         return;
     }
 
-    else if (errno == ECONNRESET || errno == EPIPE) disconnect(fd);
+    else if (errno == ECONNRESET || errno == EPIPE) return false;
 
     SLICK_CHECK_ERRNO(sent >= 0, "send.header");
 
-    bytesSent += sent;
+    state.bytesSent += sent;
+    return true;
+}
+
+} // namespace anonymous
+
+bool
+EndpointProvider::ClientState::
+send(Message&& msg)
+{
+    return send(*this, std::move(msg));
+}
+
+bool
+EndpointProvider::ClientState::
+send(const Message& msg)
+{
+    return send(*this, msg);
 }
 
 void

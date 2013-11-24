@@ -92,6 +92,7 @@ private:
         std::vector<Message> sendQueue;
 
         void send(Message&& msg);
+        void send(const Message& msg);
         void flushQueue();
     };
 
