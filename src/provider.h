@@ -25,6 +25,11 @@ typedef int ClientHandle;
 
 struct EndpointProvider
 {
+    enum {
+        HeartbeatFrequencyMs = 200,
+        HeartbeatThresholdMs = 1000,
+    }
+
     EndpointProvider(std::string name, const char* port);
     ~EndpointProvider() { shutdown(); }
 
@@ -55,8 +60,8 @@ struct EndpointProvider
 
 private:
 
-    void connectClient();
-    void disconnectClient();
+    void connectClient(int fd);
+    void disconnectClient(int fd);
 
     void recvMessage(int fd);
     void sendMessage(int fd);

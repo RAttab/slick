@@ -14,13 +14,38 @@
 #include "provider.h"
 #include "utils.h"
 
-namespace slick {
 
+/******************************************************************************/
+/* MESSAGES                                                                   */
+/******************************************************************************/
+
+namespace {
+
+namespace Msg {
+
+#define makeHttpMessage(msg) \
+    toChunkedHttp(Message(msg, sizeof msg - 1));
+og
+const char rawHeader[] =
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Length: 0\r\n"
+    "Connection: keep-alive\r\n"
+    "\r\n";
+const Message header = makeHttpMessage(rawHeader);
+const Message heartbeat = makeHttpMessage("__HB");
+
+
+#undef makeHttpMessage
+
+} // namespace Msg
+
+} // namespace anonymous
 
 /******************************************************************************/
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
+namespace slick {
 
 EndpointProvider(std::string name, const char* port) :
     name(std::move(name)), sockets(port, O_NONBLOCK), pollThread(0)
@@ -90,7 +115,7 @@ poll()
     enum { MaxEvents = 10 };
     struct epoll_event events[MaxEvents];
 
-    static const double heartbeatFreq = 0.1;
+    double heartbeatFreq = HeartbeatFrequencyMs / 1000.0
     double nextHearbeat = wall() + heartbeatFreq;
 
     while(true)
@@ -153,9 +178,16 @@ connectClient(int fd)
 
 void
 EndpointProvider::
-disconnectClient()
+disconnectClient(int fd)
 {
+    int ret = shutdown(fd, SHUT_RDWR);
+    SLICK_CHECK_ERRNO(ret != -1, "shutdown");
 
+    ret = close(fd);
+    SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
+
+    clients.erase(fd);
+    onLostClient(fd);
 }
 
 void
@@ -182,21 +214,29 @@ void
 EndpointProvider::
 sendHeartbeats()
 {
-    static const char msg[] = "HEARTBEAT";
-    static const size_t length = sizeof msg;
+    double now = wall();
 
+    std::vector<int> toDisconnect;
+    for (auto& entry : clients) {
+        auto& client = entry.second;
+
+        if (now - client.lastHearbeatRecv < HeartbeatThresholdMs / 1000.0) {
+            client.send(Msg::heartbeat);
+            client.lastHeartbeatSent = now;
+        }
+        else toDisconnect.push_back(entry.first);
+    }
+
+    for (int fd : toDisconnect) disconnect(fd);
 }
 
 void
 EndpointProvider::
 sendHeader(int fd)
 {
-    static const char msg[] = "";
-    static const size_t length = sizeof msg;
-
     auto it = clients.find(fd);
     std::assert(it != clients.end());
-    it->send(Message(msg, length));
+    it->send(Msg::header);
 }
 
 
