@@ -69,8 +69,6 @@ PassiveSockets(const char* port, int flags)
             bind(fd, it->ai_addr, it->ai_addrlen) &&
             listen(fd, 10);
 
-        setOptions(fd);
-
         if (ok) fds.push_back(fd);
         else close(fd);
     }
@@ -83,16 +81,6 @@ PassiveSockets::
 {
     for (int fd : fds) close(fd);
 }
-
-
-int
-PassiveSockets::
-setOptions(int fd)
-{
-    int ret = setsockopt(fd, TCP_NODELAY, nullptr, 0);
-    SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
-}
-
 
 
 } // slick

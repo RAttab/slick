@@ -47,8 +47,6 @@ struct PassiveSockets
     };
 
 private:
-    int setOptions(int fd);
-
     std::vector<int> fds;
 };
 

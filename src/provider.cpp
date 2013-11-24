@@ -162,6 +162,9 @@ connectClient(int fd)
 
         FdGuard(fd);
 
+        int ret = setsockopt(fd, TCP_NODELAY, nullptr, 0);
+        SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
+
         struct epoll_event ev = { 0 };
         ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
         ev.events(pollFd, fd, &ev);
