@@ -50,7 +50,6 @@ EndpointProvider::
     for (int fd : toDisconnect)
         disconnectClient(fd);
 
-
     close(pollFd);
 }
 
@@ -107,16 +106,8 @@ EndpointProvider::
 connectClient(int fd)
 {
     while (true) {
-        ClientState client;
-
-        int fd = accept4(fd, &client.addr, &client.addrlen, O_NONBLOCK);
-        if (fd < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
-        SLICK_CHECK_ERRNO(fd >= 0, "accept");
-
-        FdGuard(fd);
-
-        int ret = setsockopt(fd, TCP_NODELAY, nullptr, 0);
-        SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
+        ActiveSocket socket = ActiveSocket::accept(fd, O_NONBLOCK);
+        if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
 
         struct epoll_event ev = { 0 };
         ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
@@ -125,9 +116,9 @@ connectClient(int fd)
         ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
         SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.client");
 
-        fd.release();
-
-        clients[fd] = std::move(client);
+        ClientState client;
+        client.socket = std::move(socket);
+        clients[client.socket.fd()] = std::move(client);
     }
 }
 
@@ -136,12 +127,6 @@ void
 EndpointProvider::
 disconnectClient(int fd)
 {
-    int ret = shutdown(fd, SHUT_RDWR);
-    SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
-
-    ret = close(fd);
-    SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
-
     clients.erase(fd);
     onLostClient(fd);
 }
@@ -191,7 +176,8 @@ bool sendToClient(EndpointProvider::ClientState& client, Msg&& msg)
         return;
     }
 
-    ssize_t sent = send(client.fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
+    ssize_t sent =
+        send(client.socket.fd(), msg.bytes(), msg.size(), MSG_NOSIGNAL);
     if (sent >= 0) {
         std::assert(sent == msg.size());
         return true;

@@ -69,14 +69,9 @@ private:
 
     struct ClientState
     {
-        ClientState() :
-            addr({ 0 }), addrlen(sizeof addr),
-            bytesSent(0), bytesRecv(0),
-            writable(true)
-        {}
+        ClientState() : bytesSent(0), bytesRecv(0), writable(true) {}
 
-        struct sockaddr addr;
-        socklen_t addrlen;
+        ActiveSocket socket;
 
         size_t bytesSent;
         size_t bytesRecv;

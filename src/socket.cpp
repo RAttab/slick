@@ -52,6 +52,71 @@ private:
 };
 
 
+
+/******************************************************************************/
+/* ACTIVE SOCKET                                                              */
+/******************************************************************************/
+
+ActiveSocket::
+ActiveSocket(const char* host, int flags) :
+    fd_(-1)
+{
+    for (InterfaceIt it(host, nullptr); it; it++) {
+        int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
+        if (fd < 0) continue;
+
+        FdGuard guard(fd);
+
+        int ret = connect(it->ai_addr, it->ai_addrlen);
+        if (ret < 0) {
+            close(fd);
+            continue;
+        }
+
+        fd_ = fd;
+        addr = it->ai_addr;
+        addrlen = it->ai_addrlen;
+    }
+
+    if (fds_ < 0) throw std::exception("ERROR: no valid interface");
+    init();
+}
+
+
+ActiveSocket&&
+PassiveSocket::
+accept(int fd, int flags)
+{
+    ActiveSocket socket;
+
+    socket.fd_ = accept4(fd, &socket.addr, &socket.addrlen, flags);
+    if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        return std::move(socket);
+    SLICK_CHECK_ERRNO(socket.fd_ >= 0, "accept");
+
+    socket.init();
+    return std::move(socket);
+}
+
+void
+ActiveSocket::
+init()
+{
+    int ret = setsockopt(fd_, TCP_NODELAY, nullptr, 0);
+    SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
+}
+
+ActiveSocket::
+~ActiveSocket()
+{
+    int ret = shutdown(fd, SHUT_RDWR);
+    SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
+
+    ret = close(fd);
+    SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
+}
+
+
 /******************************************************************************/
 /* PASSIVE SOCKET                                                             */
 /******************************************************************************/
@@ -69,18 +134,19 @@ PassiveSockets(const char* port, int flags)
             bind(fd, it->ai_addr, it->ai_addrlen) &&
             listen(fd, 10);
 
-        if (ok) fds.push_back(fd);
+        if (ok) fds_.push_back(fd);
         else close(fd);
     }
 
-    if (fds.empty()) throw std::string("ERROR: no valid interface");
+    if (fds_.empty()) throw std::exception("ERROR: no valid interface");
 }
 
 PassiveSockets::
 ~PassiveSockets()
 {
-    for (int fd : fds) close(fd);
+    for (int fd : fds_) close(fd);
 }
 
 
 } // slick
+
