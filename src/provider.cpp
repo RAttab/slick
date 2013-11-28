@@ -16,21 +16,6 @@
 
 
 /******************************************************************************/
-/* MESSAGES                                                                   */
-/******************************************************************************/
-
-namespace {
-
-namespace Msg {
-
-const char rawHearbeat[] = "__HB__";
-const Message heartbeat = makeHttpMessage(rawHeartbeat, sizeof rawHeartbeat);
-
-} // namespace Msg
-
-} // namespace anonymous
-
-/******************************************************************************/
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
@@ -87,9 +72,6 @@ poll()
     enum { MaxEvents = 10 };
     struct epoll_event events[MaxEvents];
 
-    double heartbeatFreq = HeartbeatFrequencyMs / 1000.0
-    double nextHearbeat = wall() + heartbeatFreq;
-
     while(true)
     {
         int n = epoll_wait(pollFd, events, MaxEvents, 100);
@@ -114,12 +96,6 @@ poll()
             }
 
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
-        }
-
-        double now = wall();
-        if (nextHeartbeat < now) {
-            sendHeartbeats();
-            nextHeartbeat = now + heartbeatFreq;
         }
     }
 
@@ -196,10 +172,7 @@ recvMessage(int fd)
         }
 
         it->bytesRecv += read;
-
-        Message msg(buffer, read);
-        if (msg == Msg::heartbeat) it->lastHeartbeatRecv = wall();
-        else onMessage(fd, std::move(msg));
+        onMessage(fd, Message(buffer, read));
     }
 
 }
@@ -287,30 +260,5 @@ flushQueue(int fd)
         break;
     }
 }
-
-
-void
-EndpointProvider::
-sendHeartbeats()
-{
-    double now = wall();
-
-    std::vector<int> toDisconnect;
-    for (auto& entry : clients) {
-        auto& client = entry.second;
-
-        if (now - client.lastHearbeatRecv > HeartbeatThresholdMs / 1000.0)
-            toDisconnect.push_back(entry.first);
-
-        else if (client.lastHearbeatRecv > client.lastHeartbeatSent) {
-            client.lastHeartbeatSent = now;
-            if (!sendToClient(client, Msg::heartbeat))
-                toDisconnect.push_back(entry.first);
-        }
-    }
-
-    for (int fd : toDisconnect) disconnectClient(fd);
-}
-
 
 } // slick

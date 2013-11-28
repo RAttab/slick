@@ -25,10 +25,6 @@ typedef int ClientHandle;
 
 struct EndpointProvider
 {
-    enum {
-        HeartbeatFrequencyMs = 200,
-        HeartbeatThresholdMs = 1000,
-    }
 
     EndpointProvider(std::string name, const char* port);
     ~EndpointProvider() { shutdown(); }
@@ -65,7 +61,6 @@ private:
 
     void recvMessage(int fd);
     void flushQueue(int fd);
-    void sendHeartbeats();
 
     std::string name;
     int pollFd;
@@ -76,16 +71,12 @@ private:
     {
         ClientState() :
             addr({ 0 }), addrlen(sizeof addr),
-            lastHeartbeatRecv(-1), lastHearbeatSent(-1),
-            rtt(-1), bytesSent(0), bytesRecv(0),
+            bytesSent(0), bytesRecv(0),
             writable(true)
         {}
 
         struct sockaddr addr;
         socklen_t addrlen;
-
-        double lastHeartbeatRecv;
-        double lastHeartbeatSent;
 
         size_t bytesSent;
         size_t bytesRecv;
