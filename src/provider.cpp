@@ -23,16 +23,8 @@ namespace {
 
 namespace Msg {
 
-#define makeHttpMessage(msg) \
-    toChunkedHttp(Message(msg, sizeof msg - 1));
-og
-const char rawHeader[] =
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Length: 0\r\n"
-    "Connection: keep-alive\r\n"
-    "\r\n";
-const Message header = makeHttpMessage(rawHeader);
-const Message heartbeat = makeHttpMessage("__HB");
+const char rawHearbeat[] = "__HB__";
+const Message heartbeat = makeHttpMessage(rawHeartbeat, sizeof rawHeartbeat);
 
 
 #undef makeHttpMessage
@@ -68,6 +60,15 @@ void
 EndpointProvider::
 ~EndpointProvider()
 {
+    // The extra step is required to not invalidate our iterator
+    std::vector<int> toDisconnect;
+    for (const auto& client : clients)
+        toDisconnect.push_back(client.first);
+
+    for (int fd : toDisconnect)
+        disconnectClient(fd);
+
+
     close(pollFd);
 }
 
@@ -88,7 +89,7 @@ send(const ClientHandle& h, Message&& msg)
     auto it = clients.find(h);
     std::assert(it != clients.end());
 
-    if (!it->send(toChunkedHttp(msg)))
+    if (!it->send(std::move(msg)))
         disconnect(it->fd);
 }
 
@@ -98,10 +99,8 @@ broadcast(Message&& msg)
 {
     std::assert(threadId() == pollThread);
 
-    Message httpMsg = toChunkedHttp(msg);
-
     for (auto& client : clients) {
-        if(!client.send(httpMsg))
+        if(!client.send(msg))
             disconnect(client.fd);
     }
 }
@@ -180,9 +179,9 @@ connectClient(int fd)
         fd.release();
 
         clients[fd] = std::move(client);
-        sendHeader(fd);
     }
 }
+
 
 void
 EndpointProvider::
@@ -198,6 +197,7 @@ disconnectClient(int fd)
     onLostClient(fd);
 }
 
+
 void
 EndpointProvider::
 recvMessage(int fd)
@@ -205,6 +205,29 @@ recvMessage(int fd)
     auto it = clients.find(fd);
     std::assert(it != clients.end());
 
+    enum { bufferLength = 1U << 16 };
+    uint8_t buffer[bufferLength];
+
+    while (true) {
+        ssize_t read = recv(fd, buffer, bufferLength, 0);
+        if (read < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            if (errno == EINTR) continue;
+            SLICK_CHECK_ERRNO(read != -1, "recv");
+        }
+
+        std::assert(read < bufferLength);
+        if (!read) {
+            disconnectClient(fd);
+            break;
+        }
+
+        it->bytesRecv += read;
+
+        Message msg(buffer, read);
+        if (msg == Msg::heartbeat) it->lastHeartbeatRecv = wall();
+        else onMessage(fd, std::move(msg));
+    }
 
 }
 
@@ -236,15 +259,6 @@ sendHeartbeats()
     }
 
     for (int fd : toDisconnect) disconnect(fd);
-}
-
-void
-EndpointProvider::
-sendHeader(int fd)
-{
-    auto it = clients.find(fd);
-    std::assert(it != clients.end());
-    it->send(Msg::header);
 }
 
 
@@ -306,6 +320,5 @@ flushQueue()
     std::vector<Message> queue = std::move(sendQueue);
     for (msg& : queue) send(std::move(msg));
 }
-
 
 } // slick

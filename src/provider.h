@@ -65,9 +65,7 @@ private:
 
     void recvMessage(int fd);
     void sendMessage(int fd);
-
     void sendHeartbeats();
-    void sendHeader(int fd):
 
     std::string name;
     int pollFd;
@@ -89,7 +87,6 @@ private:
         double lastHeartbeatRecv;
         double lastHeartbeatSent;
 
-        double rtt;
         size_t bytesSent;
         size_t bytesRecv;
 
