@@ -64,7 +64,7 @@ private:
     void disconnectClient(int fd);
 
     void recvMessage(int fd);
-    void sendMessage(int fd);
+    void flushQueue(int fd);
     void sendHeartbeats();
 
     std::string name;
@@ -92,10 +92,6 @@ private:
 
         bool writable;
         std::vector<Message> sendQueue;
-
-        void send(Message&& msg);
-        void send(const Message& msg);
-        void flushQueue();
     };
 
     std::unordered_map<ClientHandle, ClientState> clients;

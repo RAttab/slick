@@ -80,30 +80,6 @@ publish(const std::string& endpoint)
     // \todo register ourself with zk here.
 }
 
-void
-EndpointProvider::
-send(const ClientHandle& h, Message&& msg)
-{
-    std::assert(threadId() == pollThread);
-
-    auto it = clients.find(h);
-    std::assert(it != clients.end());
-
-    if (!it->send(std::move(msg)))
-        disconnect(it->fd);
-}
-
-void
-EndpointProvider::
-broadcast(Message&& msg)
-{
-    std::assert(threadId() == pollThread);
-
-    for (auto& client : clients) {
-        if(!client.send(msg))
-            disconnect(client.fd);
-    }
-}
 
 void
 EndpointProvider::
@@ -140,7 +116,7 @@ poll()
                 continue;
             }
 
-            if (ev.events & EPOLLOUT) sendMessage(ev.data.fd);
+            if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
         double now = wall();
@@ -231,13 +207,88 @@ recvMessage(int fd)
 
 }
 
+
+namespace {
+
+// This is not part of the class EndpointProvider because we don't want to make
+// it part of the header.
+
+template<typename Msg>
+bool sendToClient(EndpointProvider::ClientState& client, Msg&& msg)
+{
+    if (!client.writable) {
+        client.sendQueue.emplace_back(std::forward(msg));
+        return;
+    }
+
+    ssize_t sent = send(client.fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
+    if (sent >= 0) {
+        std::assert(sent == msg.size());
+        return true;
+    }
+
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        client.writable = false;
+        client.sendQueue.emplace_back(std::forward(msg));
+        return true;
+    }
+
+    else if (errno == ECONNRESET || errno == EPIPE) return false;
+
+    SLICK_CHECK_ERRNO(sent >= 0, "send.header");
+
+    client.bytesSent += sent;
+    return true;
+}
+
+} // namespace anonymous
+
 void
 EndpointProvider::
-sendMessage(int fd)
+send(const ClientHandle& h, Message&& msg)
+{
+    std::assert(threadId() == pollThread);
+
+    auto it = clients.find(h);
+    std::assert(it != clients.end());
+
+    if (!sendToClient(it->second, std::move(msg)))
+        disconnectClient(it->first);
+}
+
+void
+EndpointProvider::
+broadcast(Message&& msg)
+{
+    std::assert(threadId() == pollThread);
+
+    std::vector<int> toDisconnect;
+
+    for (auto& client : clients) {
+        if (!sendToClient(client, msg))
+            toDisconnect.push_back(client.first);
+    }
+
+    for (int fd : toDisconnect) disconnectClient(fd);
+}
+
+void
+EndpointProvider::
+flushQueue(int fd)
 {
     auto it = clients.find(fd);
     std::assert(it != clients.end());
-    it->flushQueue();
+
+    ClientState& client = it->second;
+    client.writable = true;
+
+    std::vector<Message> queue = std::move(client.sendQueue);
+    for (msg& : queue) {
+        if (sendToClient(client, std::move(msg))) continue;
+
+        disconnectClient(fd);
+        break;
+    }
 }
 
 
@@ -252,73 +303,14 @@ sendHeartbeats()
         auto& client = entry.second;
 
         if (now - client.lastHearbeatRecv < HeartbeatThresholdMs / 1000.0) {
-            client.send(Msg::heartbeat);
             client.lastHeartbeatSent = now;
+            if (sendToClient(client, Msg::heartbeat)) continue;
         }
-        else toDisconnect.push_back(entry.first);
+        toDisconnect.push_back(entry.first);
     }
 
-    for (int fd : toDisconnect) disconnect(fd);
+    for (int fd : toDisconnect) disconnectClient(fd);
 }
 
-
-/******************************************************************************/
-/* CLIENT STATE                                                               */
-/******************************************************************************/
-
-namespace {
-
-template<typename Msg>
-bool send(EndpointProvider::ClientState& state, Msg&& msg)
-{
-    if (!state.writable) {
-        state.sendQueue.emplace_back(std::forward(msg));
-        return;
-    }
-
-    ssize_t sent = send(state.fd, msg.bytes(), msg.size(), MSG_NOSIGNAL);
-    if (sent >= 0) {
-        std::assert(sent == msg.size());
-        return;
-    }
-
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        state.writable = false;
-        state.sendQueue.emplace_back(std::forward(msg));
-        return;
-    }
-
-    else if (errno == ECONNRESET || errno == EPIPE) return false;
-
-    SLICK_CHECK_ERRNO(sent >= 0, "send.header");
-
-    state.bytesSent += sent;
-    return true;
-}
-
-} // namespace anonymous
-
-bool
-EndpointProvider::ClientState::
-send(Message&& msg)
-{
-    return send(*this, std::move(msg));
-}
-
-bool
-EndpointProvider::ClientState::
-send(const Message& msg)
-{
-    return send(*this, msg);
-}
-
-void
-EndpointProvider::ClientState::
-flushQueue()
-{
-    writable = true;
-    std::vector<Message> queue = std::move(sendQueue);
-    for (msg& : queue) send(std::move(msg));
-}
 
 } // slick
