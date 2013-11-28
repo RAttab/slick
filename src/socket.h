@@ -5,6 +5,7 @@
    Socket abstraction
 */
 
+#pragma once
 
 namespace slick {
 
@@ -35,7 +36,7 @@ private:
 
 struct ActiveSocket
 {
-    explicit ActiveSocket(const char* host, int flags = 0);
+    explicit ActiveSocket(const char* host, const char* port, int flags = 0);
     ~ActiveSocket();
 
     ActiveSocket(const ActiveSocket&) = delete;

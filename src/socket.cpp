@@ -58,10 +58,10 @@ private:
 /******************************************************************************/
 
 ActiveSocket::
-ActiveSocket(const char* host, int flags) :
+ActiveSocket(const char* host, const char* port, int flags) :
     fd_(-1)
 {
-    for (InterfaceIt it(host, nullptr); it; it++) {
+    for (InterfaceIt it(host, port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
