@@ -26,9 +26,6 @@ namespace Msg {
 const char rawHearbeat[] = "__HB__";
 const Message heartbeat = makeHttpMessage(rawHeartbeat, sizeof rawHeartbeat);
 
-
-#undef makeHttpMessage
-
 } // namespace Msg
 
 } // namespace anonymous
@@ -121,7 +118,7 @@ poll()
 
         double now = wall();
         if (nextHeartbeat < now) {
-            sendHeartbeat();
+            sendHeartbeats();
             nextHeartbeat = now + heartbeatFreq;
         }
     }
@@ -149,7 +146,7 @@ connectClient(int fd)
         ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
         ev.events(pollFd, fd, &ev);
 
-        int ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
+        ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
         SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.client");
 
         fd.release();
@@ -164,7 +161,7 @@ EndpointProvider::
 disconnectClient(int fd)
 {
     int ret = shutdown(fd, SHUT_RDWR);
-    SLICK_CHECK_ERRNO(ret != -1, "shutdown");
+    SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
 
     ret = close(fd);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
@@ -193,7 +190,7 @@ recvMessage(int fd)
         }
 
         std::assert(read < bufferLength);
-        if (!read) {
+        if (!read) { // indicates that shutdown was called on the client side.
             disconnectClient(fd);
             break;
         }
@@ -302,11 +299,14 @@ sendHeartbeats()
     for (auto& entry : clients) {
         auto& client = entry.second;
 
-        if (now - client.lastHearbeatRecv < HeartbeatThresholdMs / 1000.0) {
+        if (now - client.lastHearbeatRecv > HeartbeatThresholdMs / 1000.0)
+            toDisconnect.push_back(entry.first);
+
+        else if (client.lastHearbeatRecv > client.lastHeartbeatSent) {
             client.lastHeartbeatSent = now;
-            if (sendToClient(client, Msg::heartbeat)) continue;
+            if (!sendToClient(client, Msg::heartbeat))
+                toDisconnect.push_back(entry.first);
         }
-        toDisconnect.push_back(entry.first);
     }
 
     for (int fd : toDisconnect) disconnectClient(fd);
