@@ -24,18 +24,8 @@ namespace slick {
 EndpointProvider(std::string name, const char* port) :
     name(std::move(name)), sockets(port, O_NONBLOCK), pollThread(0)
 {
-    pollFd = epoll_create(1);
-    SLICK_CHECK_ERRNO(pollFd != -1, "epoll_create");
-
-    struct epoll_event ev = { 0 };
-    ev.events = EPOLLIN | EPOLLET;
-
-    for (int fd : sockets.fds()) {
-        ev.events.fd = fd;
-
-        int ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
-        SLICK_CHECK_ERRNO(ret != -1, "epoll_create");
-    }
+    for (int fd : sockets.fds())
+        poller.add(fd, EPOLLET | EPOLLIN);
 }
 
 void
@@ -49,8 +39,6 @@ EndpointProvider::
 
     for (int fd : toDisconnect)
         disconnectClient(fd);
-
-    close(pollFd);
 }
 
 
@@ -68,34 +56,25 @@ poll()
 {
     pollThread = threadId();
 
-    enum { MaxEvents = 10 };
-    struct epoll_event events[MaxEvents];
-
     while(true)
     {
-        int n = epoll_wait(pollFd, events, MaxEvents, 100);
-        if (n < 0 && errno == EINTR) continue;
-        SLICK_CHECK_ERRNO(n >= 0, "epoll_wait");
+        struct epoll_event ev = poller.next();
+        SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
 
-        for (size_t i = 0; i < n; ++i) {
-            const auto& ev = events[i];
-            SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
-
-            if (sockets.test(ev.data.fd)) {
-                std::assert(ev.events == EPOLLIN);
-                connectClient(ev.data.fd);
-                continue;
-            }
-
-            if (ev.events & EPOLLIN) recvMessage(ev.data.fd);
-
-            if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
-                disconnectClient(ev.data.fd);
-                continue;
-            }
-
-            if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
+        if (sockets.test(ev.data.fd)) {
+            std::assert(ev.events == EPOLLIN);
+            connectClient(ev.data.fd);
+            continue;
         }
+
+        if (ev.events & EPOLLIN) recvMessage(ev.data.fd);
+
+        if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
+            disconnectClient(ev.data.fd);
+            continue;
+        }
+
+        if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
     }
 
     pollThread = 0;
@@ -109,12 +88,7 @@ connectClient(int fd)
         ActiveSocket socket = ActiveSocket::accept(fd, O_NONBLOCK);
         if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
 
-        struct epoll_event ev = { 0 };
-        ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
-        ev.events(pollFd, fd, &ev);
-
-        ret = epoll_ctl(pollfd, EPOLL_CTL_ADD, fd, &ev);
-        SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.client");
+        poller.add(fd, EPOLLET | EPOLLIN | EPOLLOUT);
 
         ClientState client;
         client.socket = std::move(socket);
@@ -127,6 +101,7 @@ void
 EndpointProvider::
 disconnectClient(int fd)
 {
+    poller.del(fd);
     clients.erase(fd);
     onLostClient(fd);
 }

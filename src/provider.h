@@ -63,7 +63,7 @@ private:
     void flushQueue(int fd);
 
     std::string name;
-    int pollFd;
+    Epoll poller;
     PassiveSockets sockets;
     size_t pollThread;
 
