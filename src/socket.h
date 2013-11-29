@@ -31,23 +31,38 @@ private:
 
 
 /******************************************************************************/
-/* ACTIVE SOCKET                                                              */
+/* PORT RANGE                                                                 */
 /******************************************************************************/
 
-struct ActiveSocket
-{
-    explicit ActiveSocket(const char* host, const char* port, int flags = 0);
-    ~ActiveSocket();
+typedef uint16_t Port;
 
-    ActiveSocket(const ActiveSocket&) = delete;
-    ActiveSocket& operator=(const ActiveSocket&) = delete;
+struct PortRange
+{
+    PortRange(Port port) : first(port), last(port + 1) {}
+    PortRange(Port first, Port last) : first(first), last(last) {}
+
+    Port first, last;
+};
+
+
+/******************************************************************************/
+/* SOCKET                                                                     */
+/******************************************************************************/
+
+struct Socket
+{
+    explicit Socket(const std::strign& host, PortRange ports, int flags = 0);
+    ~Socket();
+
+    Socket(const Socket&) = delete;
+    Socket& operator=(const Socket&) = delete;
 
     int fd() const { return fd_; }
 
-    static ActiveSocket&& accept(int passiveFd, int flags = 0);
+    static Socket&& accept(int passiveFd, int flags = 0);
 
 private:
-    explicit ActiveSocket() : fd_(-1) {}
+    explicit Socket() : fd_(-1) {}
     void init();
 
     int fd_;
@@ -62,7 +77,7 @@ private:
 
 struct PassiveSockets
 {
-    explicit PassiveSockets(const char* port, int flags = 0);
+    explicit PassiveSockets(Port port, int flags = 0);
     ~PassiveSockets();
 
     PassiveSockets(const PassiveSockets&) = delete;

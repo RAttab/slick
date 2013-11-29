@@ -12,21 +12,13 @@
 
 namespace slick {
 
-
-/******************************************************************************/
-/* PORT RANGE                                                                 */
-/******************************************************************************/
-
-typedef unsigned Port;
-typedef std::pair<Port, Port> PortRange;
-
 /******************************************************************************/
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
 struct EndpointProvider : public EndpointBase
 {
-    EndpointProvider(const char* port);
+    EndpointProvider(PortRange ports);
 
     void publish(const std::string& endpoint);
 

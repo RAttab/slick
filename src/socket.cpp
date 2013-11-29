@@ -17,7 +17,7 @@ namespace slick {
 
 struct InterfaceIt
 {
-    InterfaceIt(const char* host, const char* port) :
+    InterfaceIt(const std::string& host, Port port) :
         first(nullptr), cur(nullptr)
     {
         struct addrinfo hints = { 0 };
@@ -25,10 +25,14 @@ struct InterfaceIt
         hint.ai_family = AF_UNSPEC;
         hint.ai_socktype = SOCK_STREAM;
 
-        assert(host != null || port != null);
+        assert(!host.empty() || port);
+        std::string portStr = to_string(port);
 
-        int ret = getaddrinfo(host, port, &hints, &first);
-        SLICK_CHECK_ERRNO(!ret, "getaddrinfo"):
+        int ret = getaddrinfo(host, port.c_str(), &hints, &first);
+        if (ret) {
+            SLICK_CHECK_ERRNO(ret != EAI_SYSTEM, "getaddrinfo");
+            throw std::exception("error: " + to_string(ret));
+        }
 
         cur = first;
     }
@@ -52,16 +56,15 @@ private:
 };
 
 
-
 /******************************************************************************/
-/* ACTIVE SOCKET                                                              */
+/* SOCKET                                                                     */
 /******************************************************************************/
 
-ActiveSocket::
-ActiveSocket(const char* host, const char* port, int flags) :
+Socket::
+Socket(const std::strign& host, PortRange ports, int flags) :
     fd_(-1)
 {
-    for (InterfaceIt it(host, port); it; it++) {
+    for (InterfaceIt it(host, ports.first); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
@@ -83,11 +86,11 @@ ActiveSocket(const char* host, const char* port, int flags) :
 }
 
 
-ActiveSocket&&
+Socket&&
 PassiveSocket::
 accept(int fd, int flags)
 {
-    ActiveSocket socket;
+    Socket socket;
 
     socket.fd_ = accept4(fd, &socket.addr, &socket.addrlen, flags);
     if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
@@ -99,15 +102,15 @@ accept(int fd, int flags)
 }
 
 void
-ActiveSocket::
+Socket::
 init()
 {
     int ret = setsockopt(fd_, TCP_NODELAY, nullptr, 0);
     SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
 }
 
-ActiveSocket::
-~ActiveSocket()
+Socket::
+~Socket()
 {
     int ret = shutdown(fd, SHUT_RDWR);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
@@ -122,7 +125,7 @@ ActiveSocket::
 /******************************************************************************/
 
 PassiveSockets::
-PassiveSockets(const char* port, int flags)
+PassiveSockets(Port port, int flags)
 {
     for (InterfaceIt it(nullptr, port); it; it++) {
         int fd = socket(it->ai_domain, it->ai_type | flags, it->ai_protocol);

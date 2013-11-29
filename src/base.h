@@ -46,7 +46,7 @@ struct EndpointBase
 
 protected:
 
-    void connect(ActiveSocket&& socket);
+    void connect(Socket&& socket);
     void disconnect(int fd);
 
     virtual void onPollEvent(struct epoll_event&)
@@ -67,7 +67,7 @@ private:
     {
         ConnectionState() : bytesSent(0), bytesRecv(0), writable(true) {}
 
-        ActiveSocket socket;
+        Socket socket;
 
         size_t bytesSent;
         size_t bytesRecv;

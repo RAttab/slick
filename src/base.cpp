@@ -60,7 +60,7 @@ poll()
 
 void
 EndpointBase::
-connect(ActiveSocket&& socket)
+connect(Socket&& socket)
 {
     poller.add(socket.fd(), EPOLLET | EPOLLIN | EPOLLOUT);
 

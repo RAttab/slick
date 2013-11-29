@@ -21,8 +21,8 @@
 
 namespace slick {
 
-EndpointProvider(const char* port) :
-    sockets(port, O_NONBLOCK)
+EndpointProvider(PortRange ports) :
+    sockets(ports, O_NONBLOCK)
 {
     for (int fd : sockets.fds())
         poller.add(fd, EPOLLET | EPOLLIN);
@@ -53,7 +53,7 @@ onPollEvent(struct epoll_event& ev)
     std::assert(sockets.test(ev.data.fd));
 
     while (true) {
-        ActiveSocket socket = ActiveSocket::accept(ev.data.fd, O_NONBLOCK);
+        Socket socket = Socket::accept(ev.data.fd, O_NONBLOCK);
         if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
 
         connect(std::move(socket));
