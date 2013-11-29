@@ -38,18 +38,18 @@ struct EndpointProvider
     std::function<void(ClientHandle h)> onNewClient;
     std::function<void(ClientHandle h)> onLostClient;
 
-    std::function<void(ClientHandle h, Message&& m)> onMessage;
+    std::function<void(ClientHandle h, Payload&& m)> onPayload;
 
-    void send(ClientHandle client, Message&& msg);
-    void send(ClientHandle client, const Message& msg)
+    void send(ClientHandle client, Payloag&& msg);
+    void send(ClientHandle client, const Payload& msg)
     {
-        send(client, Message(msg));
+        send(client, Payload(msg));
     }
 
-    void broadcast(Message&& msg);
-    void broadcast(const Message& msg)
+    void broadcast(Payload&& msg);
+    void broadcast(const Payload& msg)
     {
-        broadcast(Message(msg));
+        broadcast(Payload(msg));
     }
 
     // \todo Would be nice to have multicast support.
@@ -59,7 +59,7 @@ private:
     void connectClient(int fd);
     void disconnectClient(int fd);
 
-    void recvMessage(int fd);
+    void recvPayload(int fd);
     void flushQueue(int fd);
 
     std::string name;
@@ -77,7 +77,7 @@ private:
         size_t bytesRecv;
 
         bool writable;
-        std::vector<Message> sendQueue;
+        std::vector<Payload> sendQueue;
     };
 
     std::unordered_map<ClientHandle, ClientState> clients;

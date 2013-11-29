@@ -1,11 +1,11 @@
-/* message.cpp                                 -*- C++ -*-
+/* payload.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 24 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Message thingies.
+   Payload thingies.
 */
 
-#include "message.h"
+#include "payload.h"
 #include "utils.h"
 
 #include <tuple>
@@ -21,7 +21,7 @@ namespace slick {
 /* MESSAGE                                                                    */
 /******************************************************************************/
 
-Message(const uint8_t* src, size_t size) :
+Payload(const uint8_t* src, size_t size) :
     size_(size), bytes_(std::malloc(size))
 {
     std::memcpy(src, bytes_, size);
@@ -32,7 +32,7 @@ Message(const uint8_t* src, size_t size) :
 /* CHUNKED HTTP                                                               */
 /******************************************************************************/
 
-Message&& toChunkedHttp(const Message& msg)
+Payload&& toChunkedHttp(const Payload& msg)
 {
     size_t charSize = (sizeof(msg.size()) - clz(msg.bytes())) / 4;
     size_t size = charSize + 2 + msg.size() + 2;
@@ -42,7 +42,7 @@ Message&& toChunkedHttp(const Message& msg)
         snprintf(bytes.get(), size, "%x\r\n%s\r\n", msg.size(), msg.bytes());
     std::assert(written == size);
 
-    return Message(TakeOwnership, bytes.release(), size);
+    return Payload(TakeOwnership, bytes.release(), size);
 }
 
 namespace {
@@ -73,7 +73,7 @@ void testSep(uint8_t* it, uint8_t* last)
 
 } // namespace anonymous
 
-Message&& fromChunkedHttp(const Message& msg)
+Payload&& fromChunkedHttp(const Payload& msg)
 {
     uint8_t* it = msg.bytes(), last = first + msg.size();
 
@@ -91,7 +91,7 @@ Message&& fromChunkedHttp(const Message& msg)
 
     testSep(it, last);
 
-    return Message(TakeOwnership, bytes.release(), size);
+    return Payload(TakeOwnership, bytes.release(), size);
 }
 
 } // slick

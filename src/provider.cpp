@@ -67,7 +67,7 @@ poll()
             continue;
         }
 
-        if (ev.events & EPOLLIN) recvMessage(ev.data.fd);
+        if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
 
         if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
             disconnectClient(ev.data.fd);
@@ -106,10 +106,9 @@ disconnectClient(int fd)
     onLostClient(fd);
 }
 
-
 void
 EndpointProvider::
-recvMessage(int fd)
+recvPayload(int fd)
 {
     auto it = clients.find(fd);
     std::assert(it != clients.end());
@@ -132,7 +131,7 @@ recvMessage(int fd)
         }
 
         it->bytesRecv += read;
-        onMessage(fd, Message(buffer, read));
+        onPayload(fd, Payload(buffer, read));
     }
 
 }
@@ -176,7 +175,7 @@ bool sendToClient(EndpointProvider::ClientState& client, Msg&& msg)
 
 void
 EndpointProvider::
-send(const ClientHandle& h, Message&& msg)
+send(const ClientHandle& h, Payload&& msg)
 {
     std::assert(threadId() == pollThread);
 
@@ -189,7 +188,7 @@ send(const ClientHandle& h, Message&& msg)
 
 void
 EndpointProvider::
-broadcast(Message&& msg)
+broadcast(Payload&& msg)
 {
     std::assert(threadId() == pollThread);
 
@@ -213,7 +212,7 @@ flushQueue(int fd)
     ClientState& client = it->second;
     client.writable = true;
 
-    std::vector<Message> queue = std::move(client.sendQueue);
+    std::vector<Payload> queue = std::move(client.sendQueue);
     for (msg& : queue) {
         if (sendToClient(client, std::move(msg))) continue;
 

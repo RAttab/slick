@@ -1,8 +1,10 @@
-/* message.h                                 -*- C++ -*-
+/* payload.h                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 17 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Message seraizlization utilities.
+   Payload seraizlization utilities.
+
+   Might want to consider just using shared_ptr to make everything much simpler.
 */
 
 #include <cstring>
@@ -17,27 +19,27 @@ namespace slick {
 
 struct TakeOwnership {};
 
-struct Message
+struct Payload
 {
-    Message() : size_(0), bytes_(nullptr) {}
+    Payload() : size_(0), bytes_(nullptr) {}
 
-    Message(const uint8_t* src, size_t size);
+    Payload(const uint8_t* src, size_t size);
 
-    Message(TakeOwnership, const uint8_t* src, size_t size) :
+    Payload(TakeOwnership, const uint8_t* src, size_t size) :
         size_(size), bytes_(src)
     {}
 
-    Message(const Message& other)
+    Payload(const Payload& other)
     {
-        *this = std::move(Message(other.bytes_, other.size_));
+        *this = std::move(Payload(other.bytes_, other.size_));
     }
 
-    const Message& operator= (const Message& other)
+    const Payload& operator= (const Payload& other)
     {
-        *this = std::move(Message(other.bytes_, other.size_));
+        *this = std::move(Payload(other.bytes_, other.size_));
     }
 
-    ~Message()
+    ~Payload()
     {
         free(bytes_);
     }
@@ -55,7 +57,7 @@ private:
 /* PROTOCOLS                                                                  */
 /******************************************************************************/
 
-Message&& toChunkedHttp(const Message& msg);
-Message&& fromChunkedHttp(const Message& msg);
+Payload&& toChunkedHttp(const Payload& msg);
+Payload&& fromChunkedHttp(const Payload& msg);
 
 } // slick
