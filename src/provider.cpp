@@ -21,24 +21,20 @@
 
 namespace slick {
 
-EndpointProvider(std::string name, const char* port) :
-    name(std::move(name)), sockets(port, O_NONBLOCK), pollThread(0)
+EndpointProvider(const char* port) :
+    sockets(port, O_NONBLOCK)
 {
     for (int fd : sockets.fds())
         poller.add(fd, EPOLLET | EPOLLIN);
 }
 
+
 void
 EndpointProvider::
 ~EndpointProvider()
 {
-    // The extra step is required to not invalidate our iterator
-    std::vector<int> toDisconnect;
-    for (const auto& client : clients)
-        toDisconnect.push_back(client.first);
-
-    for (int fd : toDisconnect)
-        disconnectClient(fd);
+    for (int fd : sockets.fds())
+        poller.del(fd);
 }
 
 
@@ -49,175 +45,18 @@ publish(const std::string& endpoint)
     // \todo register ourself with zk here.
 }
 
-
 void
 EndpointProvider::
-poll()
+onPollEvent(struct epoll_event& ev)
 {
-    pollThread = threadId();
+    std::assert(ev.events == EPOLLIN);
+    std::assert(sockets.test(ev.data.fd));
 
-    while(true)
-    {
-        struct epoll_event ev = poller.next();
-        SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
-
-        if (sockets.test(ev.data.fd)) {
-            std::assert(ev.events == EPOLLIN);
-            connectClient(ev.data.fd);
-            continue;
-        }
-
-        if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
-
-        if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
-            disconnectClient(ev.data.fd);
-            continue;
-        }
-
-        if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
-    }
-
-    pollThread = 0;
-}
-
-void
-EndpointProvider::
-connectClient(int fd)
-{
     while (true) {
-        ActiveSocket socket = ActiveSocket::accept(fd, O_NONBLOCK);
+        ActiveSocket socket = ActiveSocket::accept(ev.data.fd, O_NONBLOCK);
         if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
 
-        poller.add(fd, EPOLLET | EPOLLIN | EPOLLOUT);
-
-        ClientState client;
-        client.socket = std::move(socket);
-        clients[client.socket.fd()] = std::move(client);
-    }
-}
-
-
-void
-EndpointProvider::
-disconnectClient(int fd)
-{
-    poller.del(fd);
-    clients.erase(fd);
-    onLostClient(fd);
-}
-
-void
-EndpointProvider::
-recvPayload(int fd)
-{
-    auto it = clients.find(fd);
-    std::assert(it != clients.end());
-
-    enum { bufferLength = 1U << 16 };
-    uint8_t buffer[bufferLength];
-
-    while (true) {
-        ssize_t read = recv(fd, buffer, bufferLength, 0);
-        if (read < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-            if (errno == EINTR) continue;
-            SLICK_CHECK_ERRNO(read != -1, "recv");
-        }
-
-        std::assert(read < bufferLength);
-        if (!read) { // indicates that shutdown was called on the client side.
-            disconnectClient(fd);
-            break;
-        }
-
-        it->bytesRecv += read;
-        onPayload(fd, Payload(buffer, read));
-    }
-
-}
-
-
-namespace {
-
-// This is not part of the class EndpointProvider because we don't want to make
-// it part of the header.
-
-template<typename Msg>
-bool sendToClient(EndpointProvider::ClientState& client, Msg&& msg)
-{
-    if (!client.writable) {
-        client.sendQueue.emplace_back(std::forward(msg));
-        return;
-    }
-
-    ssize_t sent =
-        send(client.socket.fd(), msg.bytes(), msg.size(), MSG_NOSIGNAL);
-    if (sent >= 0) {
-        std::assert(sent == msg.size());
-        return true;
-    }
-
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        client.writable = false;
-        client.sendQueue.emplace_back(std::forward(msg));
-        return true;
-    }
-
-    else if (errno == ECONNRESET || errno == EPIPE) return false;
-
-    SLICK_CHECK_ERRNO(sent >= 0, "send.header");
-
-    client.bytesSent += sent;
-    return true;
-}
-
-} // namespace anonymous
-
-void
-EndpointProvider::
-send(const ClientHandle& h, Payload&& msg)
-{
-    std::assert(threadId() == pollThread);
-
-    auto it = clients.find(h);
-    std::assert(it != clients.end());
-
-    if (!sendToClient(it->second, std::move(msg)))
-        disconnectClient(it->first);
-}
-
-void
-EndpointProvider::
-broadcast(Payload&& msg)
-{
-    std::assert(threadId() == pollThread);
-
-    std::vector<int> toDisconnect;
-
-    for (auto& client : clients) {
-        if (!sendToClient(client, msg))
-            toDisconnect.push_back(client.first);
-    }
-
-    for (int fd : toDisconnect) disconnectClient(fd);
-}
-
-void
-EndpointProvider::
-flushQueue(int fd)
-{
-    auto it = clients.find(fd);
-    std::assert(it != clients.end());
-
-    ClientState& client = it->second;
-    client.writable = true;
-
-    std::vector<Payload> queue = std::move(client.sendQueue);
-    for (msg& : queue) {
-        if (sendToClient(client, std::move(msg))) continue;
-
-        disconnectClient(fd);
-        break;
+        connect(std::move(socket));
     }
 }
 
