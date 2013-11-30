@@ -32,7 +32,9 @@ Payload(const uint8_t* src, size_t size) :
 /* CHUNKED HTTP                                                               */
 /******************************************************************************/
 
-Payload&& toChunkedHttp(const Payload& msg)
+Payload&&
+Payload::
+toChunkedHttp(const Payload& msg)
 {
     size_t charSize = (sizeof(msg.size()) - clz(msg.bytes())) / 4;
     size_t size = charSize + 2 + msg.size() + 2;
@@ -73,7 +75,9 @@ void testSep(uint8_t* it, uint8_t* last)
 
 } // namespace anonymous
 
-Payload&& fromChunkedHttp(const Payload& msg)
+Payload&&
+Payload::
+fromChunkedHttp(const Payload& msg)
 {
     uint8_t* it = msg.bytes(), last = first + msg.size();
 
@@ -93,5 +97,6 @@ Payload&& fromChunkedHttp(const Payload& msg)
 
     return Payload(TakeOwnership, bytes.release(), size);
 }
+
 
 } // slick
