@@ -18,6 +18,8 @@ struct FdGuard
     FdGuard(int fd) : fd(fd) {}
     ~FdGuard() { if (fd >= 0) close(fd); }
 
+    int get() const { return fd; }
+
     int release()
     {
         int old = fd;

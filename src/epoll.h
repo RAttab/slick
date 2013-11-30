@@ -29,10 +29,11 @@ struct Epoll
 private:
     int fd_;
 
-    enum { MaxEvents = 10 };
+    enum { MaxEvents = 1U << 4 };
     struct epoll_event events[MaxEvents];
     size_t nextEvent;
     size_t numEvents;
 };
+
 
 } // slick

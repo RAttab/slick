@@ -28,7 +28,7 @@ struct EndpointBase
     std::function<void(ConnectionHandle h)> onNewConnection;
     std::function<void(ConnectionHandle h)> onLostConnection;
 
-    std::function<void(ConnectionHandle h, Payload&& m)> onPayload;
+    std::function<void(ConnectionHandle h, Payload&& d)> onPayload;
 
     void send(ConnectionHandle client, Payloag&& msg);
     void send(ConnectionHandle client, const Payload& msg)

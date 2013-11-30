@@ -34,8 +34,8 @@ poll()
 {
     pollThread = threadId();
 
-    while(true)
-    {
+    while(poller.poll()) {
+
         struct epoll_event ev = poller.next();
         SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
 
@@ -53,8 +53,6 @@ poll()
 
         if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
     }
-
-    pollThread = 0;
 }
 
 
