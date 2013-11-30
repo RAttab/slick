@@ -5,6 +5,12 @@
    random utiltiies
 */
 
+#pragma once
+
+#include <cstdint>
+#include <atomic>
+#include <string>
+#include <time.h>
 
 
 /******************************************************************************/
@@ -49,7 +55,7 @@ struct Wall
     typedef double ClockT;
     enum { CanWrap = false };
 
-    ClockT operator() () const locklessAlwaysInline
+    ClockT operator() () const
     {
         struct timespec ts;
         if (clock_gettime(CLOCK_REALTIME, &ts) < 0)
@@ -87,7 +93,7 @@ struct Monotonic
     typedef double ClockT;
     enum { CanWrap = false };
 
-    ClockT operator() () const locklessAlwaysInline
+    ClockT operator() () const
     {
         struct timespec ts;
         if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) < 0)
@@ -116,12 +122,12 @@ struct Timer
 
     Timer() : start(clock()) {}
 
-    double elapsed() const locklessAlwaysInline
+    double elapsed() const
     {
         return Clock::diff(start, clock());
     }
 
-    double reset() locklessAlwaysInline
+    double reset()
     {
         ClockT end = clock();
         ClockT elapsed = Clock::diff(start, end);
@@ -132,6 +138,38 @@ struct Timer
 private:
     Clock clock;
     ClockT start;
+};
+
+
+/******************************************************************************/
+/* SPIN LOCK                                                                  */
+/******************************************************************************/
+
+struct SpinLock
+{
+    SpinLock() : val(0) {}
+
+    SpinLock(SpinLock&&) = delete;
+    SpinLock(const SpinLock&) = delete;
+    SpinLock& operator=(SpinLock&&) = delete;
+    SpinLock& operator=(const SpinLock&) = delete;
+
+    void lock()
+    {
+        size_t oldVal;
+        while((oldVal = val) || !val.compare_exchange_weak(oldVal, 1));
+    }
+
+    bool tryLock()
+    {
+        size_t oldVal = val;
+        return !oldVal && val.compare_exchange_strong(oldVal, 1);
+    }
+
+    void unlock() { val.store(0); }
+
+private:
+    std::atomic<size_t> val;
 };
 
 
