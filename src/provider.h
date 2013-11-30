@@ -20,7 +20,7 @@ struct EndpointProvider : public EndpointBase
 {
     EndpointProvider(PortRange ports);
 
-    void publish(const std::string& endpoint);
+    void publish(std::shared_ptr<Naming> name, const std::string& endpoint);
 
 protected:
 
@@ -28,6 +28,7 @@ protected:
 
 private:
     PassiveSockets sockets;
+    std::shared_ptr<Naming> name;
 };
 
 

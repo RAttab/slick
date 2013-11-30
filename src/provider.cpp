@@ -40,9 +40,10 @@ EndpointProvider::
 
 void
 EndpointProvider::
-publish(const std::string& endpoint)
+publish(std::shared_ptr<Naming> name, const std::string& endpoint)
 {
-    // \todo register ourself with zk here.
+    this->name = std::move(name);
+    // name->publish(endpoint, ...);
 }
 
 void

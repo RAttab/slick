@@ -6,8 +6,11 @@
 */
 
 #include "base.h"
+#include "naming.h"
 
 namespace slick {
+
+typedef FdGuard ConnectionGuard;
 
 /******************************************************************************/
 /* ENDPOINT CLIENT                                                            */
@@ -17,16 +20,13 @@ struct EndpointClient : public EndpointBase
 {
     EndpointClient() {}
 
-    void connect(const std::string& endpoint);
-    ConnectionHandle connect(const std::string& host, Port port)
-    {
-        connect(Socket(host.c_str(), port.c_str(), O_NONBLOCK));
-    }
+    void connect(std::shared_ptr<Naming> name, const std::string& endpoint);
 
-    void disconnect(ConnectionHandle h)
-    {
-        EndpointBase::disconnect(h);
-    }
+    ConnectionHandle connect(const std::string& host, Port port);
+    void disconnect(ConnectionHandle h);
+
+private:
+    std::shared_ptr<Naming> name;
 };
 
 } // slick
