@@ -60,6 +60,7 @@ private:
 
     void recvPayload(int fd);
     void flushQueue(int fd);
+    void flushMessages();
 
     size_t pollThread;
 
@@ -77,6 +78,22 @@ private:
     };
 
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
+
+    struct Message
+    {
+        Message(Payload&& data) : conn(-1), data(std::moe(data)) {}
+        Message(ConnectionHandle conn, Payload&& data) :
+            conn(conn), data(std::moe(data))
+        {}
+
+        bool isBroadcast() const { return conn < 0; }
+
+        ConnectionHandle conn;
+        Payload data;
+    };
+
+    Queue<Message, 1U << 6> messages;
+    Notify messagesFd;
 };
 
 } // slick

@@ -14,6 +14,13 @@ namespace slick {
 /* ENDPOINT BASE                                                              */
 /******************************************************************************/
 
+EndpointBase::
+EndpointBase() : pollThread(0)
+{
+    poller.add(messagesFd.fd());
+}
+
+
 void
 EndpointBase::
 ~EndpointBase()
@@ -39,19 +46,21 @@ poll()
         struct epoll_event ev = poller.next();
         SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
 
-        if (!connections.count(ev.data.fd)) {
-            onPollEvent(ev);
-            continue;
+        if (connections.count(ev.data.fd)) {
+            if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
+
+            if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
+                disconnect(ev.data.fd);
+                continue;
+            }
+
+            if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
-        if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
+        else if (ev.data.fd == messagesFd.fd())
+            flushMessages();
 
-        if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
-            disconnect(ev.data.fd);
-            continue;
-        }
-
-        if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
+        else onPollEvent(ev);
     }
 }
 
@@ -150,7 +159,11 @@ void
 EndpointBase::
 send(int fd, Payload&& msg)
 {
-    std::assert(threadId() == pollThread);
+    if (threadId() != pollThread) {
+        messages.push(Message(fd, std::move(msg)));
+        messagesFd.signal();
+        return;
+    }
 
     auto it = connections.find(fd);
     std::assert(it != connections.end());
@@ -164,7 +177,11 @@ void
 EndpointBase::
 broadcast(Payload&& msg)
 {
-    std::assert(threadId() == pollThread);
+    if (threadId() != pollThread) {
+        messages.push(Message(std::move(msg)));
+        messagesFd.signal();
+        return;
+    }
 
     std::vector<int> toDisconnect;
 
@@ -193,6 +210,21 @@ flushQueue(int fd)
 
         disconnect(fd);
         break;
+    }
+}
+
+
+void
+EndpointBase::
+flushMessages()
+{
+    while (messagesFd.poll()) {
+        if (messages.empty()) continue;
+        Message msg = messages.pop();
+
+        if (msg.isBroadcast())
+            broadcast(std::move(msg.data));
+        else send(msg.conn, std::move(msg.data));
     }
 }
 
