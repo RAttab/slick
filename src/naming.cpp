@@ -19,6 +19,8 @@ LocalNaming::
 publish(const std::string& endpoint, Payload&& data)
 {
     std::lock_guard<std::mutex> guard(lock);
+    std::assert(!isDone);
+
     endpoints[endpoint].pendingEvents.emplace_back(New, std::move(data));
 }
 
@@ -27,6 +29,8 @@ LocalNaming::
 retract(const std::string& endpoint, Payload&& data)
 {
     std::lock_guard<std::mutex> guard(lock);
+    std::assert(!isDone);
+
     endpoints[endpoint].pendingEvents.emplace_back(Lost, std::move(data));
 }
 
@@ -35,6 +39,8 @@ LocalNaming::
 discover(const std::string& endpoint, const WatchFn& watch)
 {
     std::lock_guard<std::mutex> guard(lock);
+    std::assert(!isDone);
+
     endpoints[endpoint].pendingWatches.emplace_back(watch);
 }
 
@@ -43,7 +49,7 @@ LocalNaming::
 shutdown()
 {
     std::lock_guard<std::mutex> guard(lock);
-    shutdown = true;
+    isDone = true;
     endpoints.clear();
 }
 
@@ -52,7 +58,7 @@ LocalNaming::
 poll()
 {
     std::lock_guard<std::mutex> guard(lock);
-    if (shutdown) return;
+    if (isDone) return;
 
     for (auto& endpoint : endpoints) {
         auto& info = endpoint.second;

@@ -47,7 +47,8 @@ struct Naming
 
 struct LocalNaming : public Naming
 {
-    LocalNaming() : shutdown(false) {}
+    LocalNaming() : isDone(false) {}
+    virtual ~LocalNaming() { shutdown(); }
 
     virtual void poll();
     virtual void shutdown();
@@ -82,7 +83,7 @@ private:
     };
 
     std::mutex lock;
-    bool shutdown;
+    bool isDone;
     std::map<std::string, EndpointInfo> endpoints;
 };
 
