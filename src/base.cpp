@@ -219,12 +219,13 @@ EndpointBase::
 flushMessages()
 {
     while (messagesFd.poll()) {
-        if (messages.empty()) continue;
-        Message msg = messages.pop();
+        while (!messages.empty()) {
+            Message msg = messages.pop();
 
-        if (msg.isBroadcast())
-            broadcast(std::move(msg.data));
-        else send(msg.conn, std::move(msg.data));
+            if (msg.isBroadcast())
+                broadcast(std::move(msg.data));
+            else send(msg.conn, std::move(msg.data));
+        }
     }
 }
 
