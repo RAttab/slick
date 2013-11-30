@@ -10,11 +10,12 @@
 
 namespace slick {
 
-typedef FdGuard ConnectionGuard;
 
 /******************************************************************************/
 /* ENDPOINT CLIENT                                                            */
 /******************************************************************************/
+
+typedef FdGuard ConnectionGuard;
 
 struct EndpointClient : public EndpointBase
 {

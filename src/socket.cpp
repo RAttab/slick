@@ -135,7 +135,7 @@ PassiveSockets(Port port, int flags)
 
         bool ok =
             bind(fd, it->ai_addr, it->ai_addrlen) &&
-            listen(fd, 10);
+            listen(fd, 1U << 8);
 
         if (ok) fds_.push_back(fd);
         else close(fd);
