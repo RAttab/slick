@@ -53,7 +53,7 @@ install(
     FILES
     src/utils.h
     src/queue.h
-    src/epoll.h
+    src/poll.h
     src/notify.h
     src/payload.h
     src/socket.h
@@ -69,7 +69,7 @@ add_library(
     slick
     SHARED
     src/utils.cpp
-    src/epoll.cpp
+    src/poll.cpp
     src/notify.cpp
     src/payload.cpp
     src/socket.cpp
@@ -90,3 +90,4 @@ function(slick_test name)
     add_test(${name} bin/${name}_test)
 endfunction()
 
+slick_test(simple)
