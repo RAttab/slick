@@ -51,7 +51,16 @@ endif()
 
 install(
     FILES
-    src/provider.h src/client.h src/naming.h
+    src/utils.h
+    src/queue.h
+    src/epoll.h
+    src/notify.h
+    src/payload.h
+    src/socket.h
+    src/queue.h
+    src/base.h
+    src/client.h
+    src/provider.h
 
     DESTINATION
     include/slick)
@@ -59,7 +68,14 @@ install(
 add_library(
     slick
     SHARED
-    src/provider.cpp src/cient.h)
+    src/utils.cpp
+    src/epoll.cpp
+    src/notify.cpp
+    src/payload.cpp
+    src/socket.cpp
+    src/base.cpp
+    src/client.cpp
+    src/provider.cpp)
 
 install(TARGETS slick DESTINATION lib)
 
