@@ -1,4 +1,4 @@
-/* epoll.h                                 -*- C++ -*-
+/* poll.h                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 28 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 

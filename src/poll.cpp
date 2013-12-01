@@ -1,11 +1,11 @@
-/* epoll.cpp                                 -*- C++ -*-
+/* poll.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 28 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
    Epoll wrapper
 */
 
-#include "epoll.h"
+#include "poll.h"
 
 namespace slick {
 
