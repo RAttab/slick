@@ -11,6 +11,9 @@
 
 #include <array>
 #include <atomic>
+#include <utility>
+#include <mutex>
+#include <cassert>
 
 namespace slick {
 
@@ -66,7 +69,7 @@ private:
 
     union {
         struct {
-            uint32_t read;
+            std::atomic<uint32_t> read;
             std::atomic<uint32_t> write;
         } split;
         std::atomic<uint64_t> cursors;
