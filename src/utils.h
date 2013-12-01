@@ -7,10 +7,13 @@
 
 #pragma once
 
-#include <cstdint>
+#include <chrono>
+#include <thread>
 #include <atomic>
 #include <string>
+#include <cstdlib>
 #include <time.h>
+#include <unistd.h>
 
 
 /******************************************************************************/
@@ -23,10 +26,6 @@
             throw std::string(msg) + ": " + strerror(errno);    \
     } while(false);                                             \
 
-
-/******************************************************************************/
-/* THREAD ID                                                                  */
-/******************************************************************************/
 
 namespace slick {
 
@@ -48,6 +47,15 @@ inline size_t clz(unsigned x)           { return __builtin_clz(x); }
 inline size_t clz(unsigned long x)      { return __builtin_clzl(x); }
 inline size_t clz(unsigned long long x) { return __builtin_clzll(x); }
 
+
+/******************************************************************************/
+/* SLEEP                                                                      */
+/******************************************************************************/
+
+void sleep(size_t ms)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
 
 /******************************************************************************/
 /* WALL                                                                       */

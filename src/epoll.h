@@ -36,4 +36,41 @@ private:
 };
 
 
+/******************************************************************************/
+/* SOURCE POLLER                                                              */
+/******************************************************************************/
+
+struct SourcePoller
+{
+    typedef std::function<void()> SourceFn;
+
+    template<typename T>
+    void add(T& source)
+    {
+        T* pSource = &source;
+        add(source.fd(), [=] { pSouce->poll(); });
+    }
+
+    void add(int fd, const SourceFn& fn)
+    {
+        sources[fd] = fn;
+        poller.add(fd);
+    }
+
+    void del(int fd) { sources.erase(fd); }
+
+    void poll(size_t timeout = 0)
+    {
+        while (poller.poll(timeout)) {
+            struct epoll_event ev = poller.next();
+            sources[ev.data.fd]();
+        }
+    }
+
+private:
+    Epoller poller;
+    std::unordered_map<int, SourceFn> sources;
+};
+
+
 } // slick
