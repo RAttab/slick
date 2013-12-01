@@ -136,8 +136,11 @@ Socket::
 /******************************************************************************/
 
 PassiveSockets::
-PassiveSockets(Port port, int flags)
+PassiveSockets(PortRange ports, int flags)
 {
+    // \todo Need to support multiple ports.
+    Port port = ports.first;
+
     for (InterfaceIt it(nullptr, port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
@@ -148,8 +151,7 @@ PassiveSockets(Port port, int flags)
             bind(fd, it->ai_addr, it->ai_addrlen) &&
             listen(fd, 1U << 8);
 
-        if (ok) fds_.push_back(fd);
-        else close(fd);
+        if (ok) fds_.push_back(guard.release());
     }
 
     if (fds_.empty()) throw std::runtime_error("ERROR: no valid interface");

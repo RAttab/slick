@@ -64,9 +64,6 @@ struct LocalNaming : public Naming
 
 private:
 
-    void processWatch(EndpointInfo& info, Watch& watch);
-    void processEvent(EndpointInfo& info, EventInfo& event);
-
     struct EventInfo
     {
         EventInfo() {}
@@ -86,6 +83,9 @@ private:
         std::vector<WatchFn> pendingWathes;
         std::vector<EventInfo> pendingEvents;
     };
+
+    void processWatch(EndpointInfo& info, WatchFn& watch);
+    void processEvent(EndpointInfo& info, EventInfo& event);
 
     std::mutex lock;
     bool isDone;

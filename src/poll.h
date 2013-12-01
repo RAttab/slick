@@ -48,8 +48,11 @@ private:
 
 struct SourcePoller
 {
+    SourcePoller() {}
     SourcePoller(const SourcePoller&) = delete;
     SourcePoller& operator=(const SourcePoller&) = delete;
+    SourcePoller(SourcePoller&&) = default;
+    SourcePoller& operator=(SourcePoller&&) = default;
 
 
     typedef std::function<void()> SourceFn;

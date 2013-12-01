@@ -23,7 +23,7 @@ namespace slick {
 /* MESSAGE                                                                    */
 /******************************************************************************/
 
-struct TakeOwnershipT {} TakeOwnership;
+extern struct TakeOwnershipT {} TakeOwnership;
 
 struct Payload
 {

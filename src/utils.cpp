@@ -11,6 +11,11 @@
 
 namespace slick {
 
+
+/******************************************************************************/
+/* TLS                                                                        */
+/******************************************************************************/
+
 namespace {
 
 std::atomic<size_t> nextThreadId(0);
@@ -23,6 +28,5 @@ size_t threadId()
     if (!myThreadId) myThreadId = ++nextThreadId;
     return myThreadId;
 }
-
 
 } // slick

@@ -19,16 +19,18 @@ EndpointClient::
 connect(std::shared_ptr<Naming> name, const std::string& endpoint)
 {
     this->name = std::move(name);
-    name->discover(endpoint, [=] (Payload&& data) {
-                // \todo
-            });
+    (void) endpoint;
+    // name->discover(endpoint, [=] (Payload&& data) {});
 }
 
 ConnectionHandle
 EndpointClient::
 connect(const std::string& host, Port port)
 {
-    connect(Socket(host.c_str(), port.c_str(), O_NONBLOCK));
+    Socket socket(host.c_str(), port, SOCK_NONBLOCK);
+    int fd = socket.fd();
+    EndpointBase::connect(std::move(socket));
+    return fd;
 }
 
 void

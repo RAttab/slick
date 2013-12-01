@@ -24,7 +24,7 @@ namespace slick {
 /* SLICK CHECK                                                                */
 /******************************************************************************/
 
-std::string checkErrnoString(const std::string& msg)
+inline std::string checkErrnoString(const std::string& msg)
 {
     return msg + ": " + strerror(errno);
 }
@@ -59,7 +59,7 @@ inline size_t clz(unsigned long long x) { return __builtin_clzll(x); }
 /* SLEEP                                                                      */
 /******************************************************************************/
 
-void sleep(size_t ms)
+inline void sleep(size_t ms)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
@@ -69,7 +69,7 @@ void sleep(size_t ms)
 /******************************************************************************/
 
 /** Plain old boring time taken from the kernel using a syscall. */
-struct Wall
+extern struct Wall
 {
     typedef double ClockT;
     enum { CanWrap = false };
@@ -107,7 +107,7 @@ struct Wall
 
     Sadly, we live in an imperfect world.
  */
-struct Monotonic
+extern struct Monotonic
 {
     typedef double ClockT;
     enum { CanWrap = false };

@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
     provider.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
         std::string msg = Payload::toString(data);
         printf("provider: got(%d) %s\n", conn, msg.c_str());
-        provider.send(Payload::fromString("PONG"));
+        provider.broadcast(Payload::fromString("PONG"));
         pingRecv++;
     };
 
@@ -68,11 +68,11 @@ BOOST_AUTO_TEST_CASE(simple_test)
     std::thread pollTh(pollFn);
 
     for (size_t i = 0; i < Pings; ++i)
-        client.send(Payload::fromString("PING"));
+        client.broadcast(Payload::fromString("PING"));
 
-    sleep(10);
+    slick::sleep(10);
     shutdown = true;
-    pollFn.join();
+    pollTh.join();
 
     BOOST_CHECK_EQUAL(Pings, pingRecv);
     BOOST_CHECK_EQUAL(Pings, pongRecv);

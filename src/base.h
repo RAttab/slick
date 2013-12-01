@@ -91,14 +91,28 @@ private:
         std::vector<Payload> sendQueue;
     };
 
+
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
 
     struct Message
     {
-        Message(Payload&& data) : conn(-1), data(std::move(data)) {}
+        Message() : conn(-1) {}
+
+        template<typename Payload>
+        Message(Payload&& data) :
+            conn(-1), data(std::forward<Payload>(data))
+        {}
+
         Message(ConnectionHandle conn, Payload&& data) :
             conn(conn), data(std::move(data))
         {}
+
+        Message(const Message&) = delete;
+        Message& operator=(const Message&) = delete;
+
+        Message(Message&&) = default;
+        Message& operator=(Message&&) = default;
+
 
         bool isBroadcast() const { return conn < 0; }
 

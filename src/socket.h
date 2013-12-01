@@ -68,6 +68,10 @@ struct Socket
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
 
+    Socket(Socket&&) = default;
+    Socket& operator=(Socket&&) = default;
+
+
     int fd() const { return fd_; }
 
     static Socket&& accept(int passiveFd, int flags = 0);
@@ -87,11 +91,15 @@ private:
 
 struct PassiveSockets
 {
-    explicit PassiveSockets(Port port, int flags = 0);
+    explicit PassiveSockets(PortRange ports, int flags = 0);
     ~PassiveSockets();
 
     PassiveSockets(const PassiveSockets&) = delete;
     PassiveSockets& operator=(const PassiveSockets&) = delete;
+
+    PassiveSockets(PassiveSockets&&) = default;
+    PassiveSockets& operator=(PassiveSockets&&) = default;
+
 
     const std::vector<int>& fds() { return fds_; }
     bool test(int fd)

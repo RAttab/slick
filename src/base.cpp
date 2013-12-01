@@ -94,7 +94,7 @@ EndpointBase::
 recvPayload(int fd)
 {
     auto it = connections.find(fd);
-    std::assert(it != connections.end());
+    assert(it != connections.end());
 
     enum { bufferLength = 1U << 16 };
     uint8_t buffer[bufferLength];
@@ -107,13 +107,13 @@ recvPayload(int fd)
             SLICK_CHECK_ERRNO(read != -1, "recv");
         }
 
-        std::assert(read < bufferLength);
+        assert(read < bufferLength);
         if (!read) { // indicates that shutdown was called on the connection side.
             disconnect(fd);
             break;
         }
 
-        it->bytesRecv += read;
+        it->second.bytesRecv += read;
         onPayload(fd, Payload(buffer, read));
     }
 
@@ -126,23 +126,24 @@ namespace {
 // it part of the header.
 
 template<typename Payload>
-bool sendTo(EndpointBase::ConnectionState& connection, Payload&& msg)
+bool sendTo(EndpointBase::ConnectionState& connection, Payload&& data)
 {
-    if (!connection.writable) {
-        connection.sendQueue.emplace_back(std::forward(msg));
-        return;
-    }
+    (void) connection;
+    (void) data;
 
+    if (!connection.writable) {
+        connection.sendQueue.emplace_back(std::forward<Payload>(data));
+        return true;
+    }
     ssize_t sent =
-        send(connection.socket.fd(), msg.bytes(), msg.size(), MSG_NOSIGNAL);
+        send(connection.socket.fd(), data.bytes(), data.size(), MSG_NOSIGNAL);
     if (sent >= 0) {
-        std::assert(sent == msg.size());
+        assert(size_t(sent) == data.size());
         return true;
     }
 
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        connection.writable = false;
-        connection.sendQueue.emplace_back(std::forward(msg));
+        connection.sendQueue.emplace_back(std::forward<Payload>(data));
         return true;
     }
 
@@ -168,7 +169,7 @@ send(int fd, Payload&& msg)
     }
 
     auto it = connections.find(fd);
-    std::assert(it != connections.end());
+    assert(it != connections.end());
 
     if (!sendTo(it->second, std::move(msg)))
         disconnect(it->first);
@@ -188,7 +189,7 @@ broadcast(Payload&& msg)
     std::vector<int> toDisconnect;
 
     for (auto& connection : connections) {
-        if (!sendTo(connection, msg))
+        if (!sendTo(connection.second, msg))
             toDisconnect.push_back(connection.first);
     }
 
@@ -201,13 +202,13 @@ EndpointBase::
 flushQueue(int fd)
 {
     auto it = connections.find(fd);
-    std::assert(it != connections.end());
+    assert(it != connections.end());
 
     ConnectionState& connection = it->second;
     connection.writable = true;
 
     std::vector<Payload> queue = std::move(connection.sendQueue);
-    for (msg& : queue) {
+    for (auto& msg : queue) {
         if (sendTo(connection, std::move(msg))) continue;
 
         disconnect(fd);
