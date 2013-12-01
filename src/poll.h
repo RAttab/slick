@@ -9,15 +9,13 @@
 
 #include <functional>
 #include <unordered_map>
-
+#include <sys/epoll.h>
 
 namespace slick {
 
 /******************************************************************************/
 /* EPOLL                                                                      */
 /******************************************************************************/
-
-struct epoll_event;
 
 struct Epoll
 {
@@ -29,7 +27,7 @@ struct Epoll
     struct epoll_event next();
     bool poll(int timeoutMs = 0);
 
-    int fd() { return fd_; }
+    int fd() const { return fd_; }
 
 private:
     int fd_;
@@ -49,11 +47,13 @@ struct SourcePoller
 {
     typedef std::function<void()> SourceFn;
 
+    int fd() const { return poller.fd(); }
+
     template<typename T>
     void add(T& source)
     {
         T* pSource = &source;
-        add(source.fd(), [=] { pSouce->poll(); });
+        add(source.fd(), [=] { pSource->poll(); });
     }
 
     void add(int fd, const SourceFn& fn)
@@ -73,7 +73,7 @@ struct SourcePoller
     }
 
 private:
-    Epoller poller;
+    Epoll poller;
     std::unordered_map<int, SourceFn> sources;
 };
 

@@ -15,7 +15,7 @@ namespace slick {
 
 struct Notify
 {
-    Notify()
+    Notify();
     ~Notify();
 
     int fd() const { return fd_; }

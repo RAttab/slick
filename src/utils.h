@@ -11,23 +11,30 @@
 #include <thread>
 #include <atomic>
 #include <string>
+#include <stdexcept>
 #include <cstdlib>
 #include <time.h>
+#include <string.h>
 #include <unistd.h>
+
+namespace slick {
 
 
 /******************************************************************************/
 /* SLICK CHECK                                                                */
 /******************************************************************************/
 
+std::string checkErrnoString(const std::string& msg)
+{
+    return msg + ": " + strerror(errno);
+}
+
 #define SLICK_CHECK_ERRNO(pred,msg)                             \
     do {                                                        \
         if (!(pred))                                            \
-            throw std::string(msg) + ": " + strerror(errno);    \
-    } while(false);                                             \
+            throw std::logic_error(checkErrnoString(msg));      \
+    } while(false)                                              \
 
-
-namespace slick {
 
 /******************************************************************************/
 /* TLS                                                                        */

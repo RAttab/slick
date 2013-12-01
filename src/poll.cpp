@@ -8,6 +8,7 @@
 #include "poll.h"
 #include "utils.h"
 
+#include <cstring>
 #include <sys/epoll.h>
 
 namespace slick {
@@ -26,15 +27,17 @@ Epoll() : nextEvent(0), numEvents(0)
 Epoll::
 ~Epoll()
 {
-    clode(fd_);
+    close(fd_);
 }
 
 void
 Epoll::
 add(int fd, int flags)
 {
-    struct epoll_event ev = { 0 };
-    ev.events = flags
+    struct epoll_event ev;
+    std::memset(&ev, 0, sizeof ev);
+
+    ev.events = flags;
 
     int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, fd, &ev);
     SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.add");

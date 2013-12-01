@@ -28,25 +28,23 @@ struct Queue
 {
     Queue() { d.cursors = 0; }
 
-    int fd() const { notify.fd(); }
-
     constexpr size_t capacity() const { return Size; }
 
     size_t size() const
     {
         uint64_t all = d.cursors;
-        return wpos(old) - rpos(old);
+        return wpos(all) - rpos(all);
     }
 
     bool empty() const
     {
         uint64_t all = d.cursors;
-        return wpos(old) == rpos(old);
+        return wpos(all) == rpos(all);
     }
 
-    T&& pop()
+    T pop()
     {
-        std::assert(!empty());
+        assert(!empty());
         return std::move(queue[d.split.read++ % Size]);
     }
 
@@ -56,7 +54,7 @@ struct Queue
         std::lock_guard<SpinLock> guard(lock);
 
         uint64_t old = d.cursors;
-        std::assert(wpos(old) - rpos(old) < Size);
+        assert(wpos(old) - rpos(old) < Size);
 
         queue[wpos(old) % Size] = std::forward<Val>(val);
         d.split.write++; // should act as a release barier.

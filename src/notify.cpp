@@ -22,7 +22,7 @@ Notify::
 Notify()
 {
     fd_ = eventfd(0, EFD_NONBLOCK);
-    SLICK_CHECK_ERRNO(fd >= 0, "notify.eventfd");
+    SLICK_CHECK_ERRNO(fd_ >= 0, "notify.eventfd");
 }
 
 Notify::

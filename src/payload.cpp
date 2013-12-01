@@ -23,17 +23,18 @@ namespace slick {
 /* CHUNKED HTTP                                                               */
 /******************************************************************************/
 
-Payload&&
+Payload
 Payload::
 toChunkedHttp(const Payload& msg)
 {
-    size_t charSize = (sizeof(msg.size()) - clz(msg.bytes())) / 4;
+    size_t charSize = (sizeof(msg.size()) - clz(msg.size())) / 4;
     size_t size = charSize + 2 + msg.size() + 2;
-    std::unique_ptr<uint8_t> bytes(std::malloc(size));
+    std::unique_ptr<uint8_t> bytes((uint8_t*)std::malloc(size));
 
     int written =
-        snprintf(bytes.get(), size, "%x\r\n%s\r\n", msg.size(), msg.bytes());
-    std::assert(written == size);
+        snprintf((char*) bytes.get(), size, "%x\r\n%s\r\n",
+                unsigned(msg.size()), (char*) msg.bytes());
+    assert(size_t(written) == size);
 
     return Payload(TakeOwnership, bytes.release(), size);
 }
@@ -59,28 +60,29 @@ std::pair<size_t, uint8_t*> readHex(uint8_t* it, uint8_t* last)
 
 void testSep(uint8_t* it, uint8_t* last)
 {
-    std::assert(last - it >= 2);
+    assert(last - it >= 2);
     int r = std::memcmp(it, "\r\n", 2);
-    std::assert(!r);
+    assert(!r);
 }
 
 } // namespace anonymous
 
-Payload&&
+Payload
 Payload::
 fromChunkedHttp(const Payload& msg)
 {
-    uint8_t* it = msg.bytes(), last = first + msg.size();
+    uint8_t* it = msg.bytes();
+    uint8_t* last = it + msg.size();
 
     size_t size;
     std::tie(size, it) = readHex(it, last);
-    std::assert(it != last);
-    std::assert(it + size + 4 == last);
+    assert(it != last);
+    assert(it + size + 4 == last);
 
     testSep(it, last);
     it += 2;
 
-    std::unique_ptr<uint8_t> bytes(std::malloc(size));
+    std::unique_ptr<uint8_t> bytes((uint8_t*)std::malloc(size));
     std::memcpy(bytes.get(), it, size);
     it += size;
 

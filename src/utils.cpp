@@ -14,7 +14,7 @@ namespace slick {
 namespace {
 
 std::atomic<size_t> nextThreadId(0);
-slickTls myThreadId = 0;
+slickTls size_t myThreadId = 0;
 
 } // namespace anonymous
 

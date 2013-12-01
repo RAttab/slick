@@ -7,6 +7,7 @@
    Might want to consider just using shared_ptr to make everything much simpler.
 */
 
+#pragma once
 
 #include <memory>
 #include <string>
@@ -22,21 +23,22 @@ namespace slick {
 /* MESSAGE                                                                    */
 /******************************************************************************/
 
-struct TakeOwnership {};
+struct TakeOwnershipT {} TakeOwnership;
 
 struct Payload
 {
-    ~Payload() { free(bytes_); }
+    ~Payload() { std::free(bytes_); }
 
     Payload() : size_(0), bytes_(nullptr) {}
 
     Payload(const uint8_t* src, size_t size) :
-        size_(size), bytes_(std::malloc(size))
+        size_(size)
     {
-        std::memcpy(src, bytes_, size);
+        bytes_ = (uint8_t*) std::malloc(size);
+        std::memcpy((void*) src, (void*) bytes_, size);
     }
 
-    Payload(TakeOwnership, const uint8_t* src, size_t size) :
+    Payload(TakeOwnershipT, uint8_t* src, size_t size) :
         size_(size), bytes_(src)
     {}
 
@@ -45,17 +47,18 @@ struct Payload
         *this = std::move(Payload(other.bytes_, other.size_));
     }
 
-    const Payload& operator= (const Payload& other)
+    Payload& operator= (const Payload& other)
     {
         *this = std::move(Payload(other.bytes_, other.size_));
+        return *this;
     }
 
-    const uint8_t* bytes() const { return bytes_; }
+    uint8_t* bytes() const { return bytes_; }
     size_t size() const { return size_; }
 
 private:
     size_t size_;
-    const uint8_t* bytes_;
+    uint8_t* bytes_;
 
 public:
 
@@ -63,24 +66,29 @@ public:
     /* PROTOCOLS                                                              */
     /**************************************************************************/
 
-    static Payload&& fromChunkedHttp(const Payload& msg);
-    static Payload&& toChunkedHttp(const Payload& msg);
+    static Payload fromChunkedHttp(const Payload& msg);
+    static Payload toChunkedHttp(const Payload& msg);
 
-    static std::string&& toString(const Payload& msg)
+    static std::string toString(const Payload& msg)
     {
-        return std::string(msg.bytes(), msg.size());
+        return std::string((char*) msg.bytes(), msg.size());
     }
 
-    static Payload&& fromString(const std::string& msg)
+    static Payload fromString(const std::string& msg)
     {
-        return fromString(msg.c_str());
+        return fromString(msg.c_str(), msg.size());
     }
 
-    static Payload&& fromString(const char* msg)
+    static Payload fromString(const char* msg)
     {
-        std::unique_ptr<uint8_t> bytes(std::malloc(msg.size()));
-        std::memcpy(bytes, msg.bytes(), msg.size());
-        return Payload(TakeOwnership, bytes.release(), msg.size());
+        return fromString(msg, std::strlen(msg));
+    }
+
+    static Payload fromString(const char* msg, size_t size)
+    {
+        std::unique_ptr<uint8_t> bytes((uint8_t*) std::malloc(size));
+        std::memcpy(bytes.get(), msg, size);
+        return Payload(TakeOwnership, bytes.release(), size);
     }
 
 };

@@ -8,9 +8,14 @@
 #include "socket.h"
 #include "utils.h"
 
+#include <string>
+#include <cstring>
+#include <cassert>
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 namespace slick {
 
@@ -24,18 +29,20 @@ struct InterfaceIt
     InterfaceIt(const std::string& host, Port port) :
         first(nullptr), cur(nullptr)
     {
-        struct addrinfo hints = { 0 };
-        hint.ai_flags = host ? nullptr : AF_PASSIVE;
-        hint.ai_family = AF_UNSPEC;
-        hint.ai_socktype = SOCK_STREAM;
+        struct addrinfo hints;
+        std::memset(&hints, 0, sizeof hints);
+
+        hints.ai_flags = host.empty() ? AI_PASSIVE : 0;
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
 
         assert(!host.empty() || port);
-        std::string portStr = to_string(port);
+        std::string portStr = std::to_string(port);
 
-        int ret = getaddrinfo(host, port.c_str(), &hints, &first);
+        int ret = getaddrinfo(host.c_str(), portStr.c_str(), &hints, &first);
         if (ret) {
             SLICK_CHECK_ERRNO(ret != EAI_SYSTEM, "getaddrinfo");
-            throw std::exception("error: " + to_string(ret));
+            throw std::logic_error("error: " + std::to_string(ret));
         }
 
         cur = first;
@@ -47,11 +54,11 @@ struct InterfaceIt
     }
 
     explicit operator bool() const { return cur; }
-    void operator++ () const { cur = cur->ai_next; }
-    void operator++ (int) const { cur = cur->ai_next; }
+    void operator++ () { cur = cur->ai_next; }
+    void operator++ (int) { cur = cur->ai_next; }
 
     const struct addrinfo& operator* () const { return *cur; }
-    const struct addrinfo* operator-> () const { return *cur; }
+    const struct addrinfo* operator-> () const { return cur; }
 
 
 private:
@@ -65,7 +72,7 @@ private:
 /******************************************************************************/
 
 Socket::
-Socket(const std::strign& host, PortRange ports, int flags) :
+Socket(const std::string& host, PortRange ports, int flags) :
     fd_(-1)
 {
     for (InterfaceIt it(host, ports.first); it; it++) {
@@ -74,24 +81,24 @@ Socket(const std::strign& host, PortRange ports, int flags) :
 
         FdGuard guard(fd);
 
-        int ret = connect(it->ai_addr, it->ai_addrlen);
+        int ret = connect(fd, it->ai_addr, it->ai_addrlen);
         if (ret < 0) {
             close(fd);
             continue;
         }
 
         fd_ = fd;
-        addr = it->ai_addr;
         addrlen = it->ai_addrlen;
+        std::memcpy(&addr, &it->ai_addr, sizeof addr);
     }
 
-    if (fds_ < 0) throw std::exception("ERROR: no valid interface");
+    if (fd_ < 0) throw std::runtime_error("ERROR: no valid interface");
     init();
 }
 
 
 Socket&&
-PassiveSocket::
+Socket::
 accept(int fd, int flags)
 {
     Socket socket;
@@ -109,17 +116,17 @@ void
 Socket::
 init()
 {
-    int ret = setsockopt(fd_, TCP_NODELAY, nullptr, 0);
+    int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, nullptr, 0);
     SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
 }
 
 Socket::
 ~Socket()
 {
-    int ret = shutdown(fd, SHUT_RDWR);
+    int ret = shutdown(fd_, SHUT_RDWR);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
 
-    ret = close(fd);
+    ret = close(fd_);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
 }
 
@@ -132,7 +139,7 @@ PassiveSockets::
 PassiveSockets(Port port, int flags)
 {
     for (InterfaceIt it(nullptr, port); it; it++) {
-        int fd = socket(it->ai_domain, it->ai_type | flags, it->ai_protocol);
+        int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
         FdGuard guard(fd);
@@ -145,7 +152,7 @@ PassiveSockets(Port port, int flags)
         else close(fd);
     }
 
-    if (fds_.empty()) throw std::exception("ERROR: no valid interface");
+    if (fds_.empty()) throw std::runtime_error("ERROR: no valid interface");
 }
 
 PassiveSockets::

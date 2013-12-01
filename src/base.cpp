@@ -24,7 +24,6 @@ EndpointBase() : pollThread(0)
 }
 
 
-void
 EndpointBase::
 ~EndpointBase()
 {

@@ -8,7 +8,10 @@
 #pragma once
 
 #include <vector>
-#include <unistd>
+#include <string>
+#include <algorithm>
+#include <cstdint>
+#include <unistd.h>
 #include <sys/socket.h>
 
 namespace slick {
@@ -58,7 +61,8 @@ struct PortRange
 
 struct Socket
 {
-    explicit Socket(const std::strign& host, PortRange ports, int flags = 0);
+    Socket() : fd_(-1) {}
+    Socket(const std::string& host, PortRange ports, int flags = 0);
     ~Socket();
 
     Socket(const Socket&) = delete;
@@ -69,7 +73,6 @@ struct Socket
     static Socket&& accept(int passiveFd, int flags = 0);
 
 private:
-    explicit Socket() : fd_(-1) {}
     void init();
 
     int fd_;
@@ -90,10 +93,10 @@ struct PassiveSockets
     PassiveSockets(const PassiveSockets&) = delete;
     PassiveSockets& operator=(const PassiveSockets&) = delete;
 
-    const std::vector<int>& fds() { return fds; }
+    const std::vector<int>& fds() { return fds_; }
     bool test(int fd)
     {
-        return find(fds_.begin(), fds_.end(), fd) != fds_.end();
+        return std::find(fds_.begin(), fds_.end(), fd) != fds_.end();
     };
 
 private:

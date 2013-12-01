@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include "payload.h"
-#include "queue.h"
 #include "socket.h"
+#include "queue.h"
+#include "notify.h"
 #include "poll.h"
+#include "payload.h"
 
 #include <vector>
 #include <functional>
@@ -27,10 +28,10 @@ typedef int ConnectionHandle;
 
 struct EndpointBase
 {
-    EndpointBase() : pollThread(0) {}
+    EndpointBase();
     virtual ~EndpointBase();
 
-    int fd() const { return pollFd; }
+    int fd() const { return poller.fd(); }
 
     void poll();
     void shutdown();
@@ -40,7 +41,7 @@ struct EndpointBase
 
     std::function<void(ConnectionHandle h, Payload&& d)> onPayload;
 
-    void send(ConnectionHandle client, Payloag&& msg);
+    void send(ConnectionHandle client, Payload&& msg);
     void send(ConnectionHandle client, const Payload& msg)
     {
         send(client, Payload(msg));
@@ -61,7 +62,7 @@ protected:
 
     virtual void onPollEvent(struct epoll_event&)
     {
-        throw std::exception("unknown epoll event");
+        throw std::logic_error("unknown epoll event");
     }
 
     Epoll poller;
@@ -91,9 +92,9 @@ private:
 
     struct Message
     {
-        Message(Payload&& data) : conn(-1), data(std::moe(data)) {}
+        Message(Payload&& data) : conn(-1), data(std::move(data)) {}
         Message(ConnectionHandle conn, Payload&& data) :
-            conn(conn), data(std::moe(data))
+            conn(conn), data(std::move(data))
         {}
 
         bool isBroadcast() const { return conn < 0; }
