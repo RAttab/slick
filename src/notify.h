@@ -18,6 +18,9 @@ struct Notify
     Notify();
     ~Notify();
 
+    Notify(const Notify&) = delete;
+    Notify& operator=(const Notify&) = delete;
+
     int fd() const { return fd_; }
 
     bool poll();

@@ -31,6 +31,9 @@ struct EndpointBase
     EndpointBase();
     virtual ~EndpointBase();
 
+    EndpointBase(const EndpointBase&) = delete;
+    EndpointBase& operator=(const EndpointBase&) = delete;
+
     int fd() const { return poller.fd(); }
 
     void poll();

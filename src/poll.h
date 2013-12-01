@@ -22,6 +22,9 @@ struct Epoll
     Epoll();
     ~Epoll();
 
+    Epoll(const Epoll&) = delete;
+    Epoll& operator=(const Epoll&) = delete;
+
     void add(int fd, int flags = EPOLLIN);
     void del(int fd);
     struct epoll_event next();
@@ -45,6 +48,10 @@ private:
 
 struct SourcePoller
 {
+    SourcePoller(const SourcePoller&) = delete;
+    SourcePoller& operator=(const SourcePoller&) = delete;
+
+
     typedef std::function<void()> SourceFn;
 
     int fd() const { return poller.fd(); }

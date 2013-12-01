@@ -28,6 +28,9 @@ struct Queue
 {
     Queue() { d.cursors = 0; }
 
+    Queue(const Queue&) = delete;
+    Queue& operator=(const Queue&) = delete;
+
     constexpr size_t capacity() const { return Size; }
 
     size_t size() const
