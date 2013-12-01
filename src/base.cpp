@@ -6,9 +6,12 @@
 */
 
 #include "base.h"
+#include "utils.h"
+
+#include <cassert>
+#include <sys/epoll.h>
 
 namespace slick {
-
 
 /******************************************************************************/
 /* ENDPOINT BASE                                                              */

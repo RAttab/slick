@@ -10,22 +10,13 @@
 
 #include <tuple>
 #include <memory>
+#include <utility>
 #include <cassert>
 #include <cstdlib>
+#include <cstdio>
 
 
 namespace slick {
-
-
-/******************************************************************************/
-/* MESSAGE                                                                    */
-/******************************************************************************/
-
-Payload(const uint8_t* src, size_t size) :
-    size_(size), bytes_(std::malloc(size))
-{
-    std::memcpy(src, bytes_, size);
-}
 
 
 /******************************************************************************/

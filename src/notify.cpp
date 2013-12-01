@@ -6,6 +6,10 @@
 */
 
 #include "notify.h"
+#include "utils.h"
+
+#include <unistd.h>
+#include <sys/eventfd.h>
 
 namespace slick {
 

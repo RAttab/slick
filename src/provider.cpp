@@ -5,14 +5,7 @@
    Implementation of the provider endpoint
 */
 
-#include <functional>
-
-#include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-
 #include "provider.h"
-#include "utils.h"
 
 
 /******************************************************************************/

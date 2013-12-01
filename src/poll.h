@@ -7,12 +7,17 @@
 
 #pragma once
 
-namespace slick {
+#include <functional>
+#include <unordered_map>
 
+
+namespace slick {
 
 /******************************************************************************/
 /* EPOLL                                                                      */
 /******************************************************************************/
+
+struct epoll_event;
 
 struct Epoll
 {

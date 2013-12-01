@@ -6,6 +6,9 @@
 */
 
 #include "poll.h"
+#include "utils.h"
+
+#include <sys/epoll.h>
 
 namespace slick {
 

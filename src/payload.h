@@ -7,8 +7,13 @@
    Might want to consider just using shared_ptr to make everything much simpler.
 */
 
+
+#include <memory>
+#include <string>
+#include <functional>
 #include <cstring>
 #include <cstdlib>
+#include <cstdint>
 
 namespace slick {
 

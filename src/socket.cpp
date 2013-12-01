@@ -8,6 +8,10 @@
 #include "socket.h"
 #include "utils.h"
 
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
 namespace slick {
 
 

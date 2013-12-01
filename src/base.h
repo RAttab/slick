@@ -7,6 +7,16 @@
 
 #pragma once
 
+#include "payload.h"
+#include "queue.h"
+#include "socket.h"
+#include "poll.h"
+
+#include <vector>
+#include <functional>
+#include <unordered_map>
+#include <cstdint>
+
 namespace slick {
 
 /******************************************************************************/

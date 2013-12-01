@@ -9,6 +9,11 @@
 
 #include "payload.h"
 
+#include <functional>
+#include <vector>
+#include <map>
+#include <mutex>
+
 namespace slick {
 
 

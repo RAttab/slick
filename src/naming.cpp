@@ -7,6 +7,9 @@
 
 #include "naming.h"
 
+#include <algorithm>
+#include <cassert>
+
 namespace slick {
 
 

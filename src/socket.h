@@ -7,7 +7,12 @@
 
 #pragma once
 
+#include <vector>
+#include <unistd>
+#include <sys/socket.h>
+
 namespace slick {
+
 
 /******************************************************************************/
 /* GUARD                                                                      */

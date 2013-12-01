@@ -8,8 +8,10 @@
 #include "base.h"
 #include "naming.h"
 
-namespace slick {
+#include <memory>
+#include <string>
 
+namespace slick {
 
 /******************************************************************************/
 /* ENDPOINT CLIENT                                                            */

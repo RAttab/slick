@@ -7,8 +7,12 @@
 
 #pragma once
 
-#include "socket.h"
 #include "base.h"
+#include "naming.h"
+
+#include <string>
+#include <memory>
+
 
 namespace slick {
 
