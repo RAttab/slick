@@ -26,6 +26,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+
 #------------------------------------------------------------------------------#
 # COMPILER TESTS
 #------------------------------------------------------------------------------#
@@ -40,6 +41,7 @@ if (SLICK_FLAG_C11)
 elseif (SLICK_FLAG_C0X)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 endif()
+
 
 #------------------------------------------------------------------------------#
 # ENV TEST
