@@ -41,6 +41,13 @@ elseif (SLICK_FLAG_C0X)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 endif()
 
+#------------------------------------------------------------------------------#
+# ENV TEST
+#------------------------------------------------------------------------------#
+
+include_directories("$ENV{HOME}/local/include")
+link_directories("$ENV{HOME}/local/lib")
+
 
 #------------------------------------------------------------------------------#
 # TCMALLOC
