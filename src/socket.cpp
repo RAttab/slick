@@ -85,18 +85,40 @@ Socket(const std::string& host, PortRange ports, int flags) :
         FdGuard guard(fd);
 
         int ret = connect(fd, it->ai_addr, it->ai_addrlen);
-        if (ret < 0) {
-            close(fd);
-            continue;
-        }
+        if (ret < 0 && errno != EINPROGRESS) continue;
 
-        fd_ = fd;
+        fd_ = guard.release();
+
         addrlen = it->ai_addrlen;
         std::memcpy(&addr, &it->ai_addr, sizeof addr);
     }
 
     if (fd_ < 0) throw std::runtime_error("ERROR: no valid interface");
     init();
+}
+
+
+Socket::
+Socket(Socket&& other) :
+    fd_(other.fd_),
+    addr(std::move(other.addr)),
+    addrlen(std::move(other.addrlen))
+{
+    other.fd_ = -1;
+}
+
+
+Socket&
+Socket::
+operator=(Socket&& other)
+{
+    fd_ = other.fd_;
+    other.fd_ = -1;
+
+    addr = std::move(other.addr);
+    addrlen = std::move(other.addrlen);
+
+    return *this;
 }
 
 
@@ -119,13 +141,16 @@ void
 Socket::
 init()
 {
-    int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, nullptr, 0);
+    int val = true;
+    int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &val, sizeof val);
     SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
 }
 
 Socket::
 ~Socket()
 {
+    if (fd_ < 0) return;
+
     int ret = shutdown(fd_, SHUT_RDWR);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
 
@@ -145,16 +170,18 @@ PassiveSockets(PortRange ports, int flags)
 
     for (InterfaceIt it(nullptr, port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
-        SLICK_CHECK_ERRNO(fd < 0, "PassiveSocket");
         if (fd < 0) continue;
 
         FdGuard guard(fd);
 
-        bool ok =
-            bind(fd, it->ai_addr, it->ai_addrlen) &&
-            listen(fd, 1U << 8);
 
-        if (ok) fds_.push_back(guard.release());
+        int ret = bind(fd, it->ai_addr, it->ai_addrlen);
+        if (ret < 0) continue;
+
+        ret = listen(fd, 1U << 8);
+        if (ret < 0) continue;
+
+        fds_.push_back(guard.release());
     }
 
     if (fds_.empty()) throw std::runtime_error("ERROR: no valid interface");

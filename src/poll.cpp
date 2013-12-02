@@ -37,6 +37,7 @@ add(int fd, int flags)
     struct epoll_event ev;
     std::memset(&ev, 0, sizeof ev);
 
+    ev.data.fd = fd;
     ev.events = flags;
 
     int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, fd, &ev);
@@ -76,6 +77,36 @@ poll(int timeoutMs)
     }
 
     return nextEvent < numEvents;
+}
+
+
+/******************************************************************************/
+/* SOURCE POLLER                                                              */
+/******************************************************************************/
+
+void
+SourcePoller::
+add(int fd, const SourceFn& fn)
+{
+    assert(fd);
+    assert(fn);
+
+    sources[fd] = fn;
+    poller.add(fd);
+}
+
+void
+SourcePoller::
+del(int fd) { sources.erase(fd); }
+
+void
+SourcePoller::
+poll(size_t timeout)
+{
+    while (poller.poll(timeout)) {
+        struct epoll_event ev = poller.next();
+        sources[ev.data.fd]();
+    }
 }
 
 

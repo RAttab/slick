@@ -68,9 +68,8 @@ struct Socket
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
 
-    Socket(Socket&&) = default;
-    Socket& operator=(Socket&&) = default;
-
+    Socket(Socket&& other);
+    Socket& operator=(Socket&& other);
 
     int fd() const { return fd_; }
 

@@ -80,7 +80,7 @@ private:
 
     struct ConnectionState
     {
-        ConnectionState() : bytesSent(0), bytesRecv(0), writable(true) {}
+        ConnectionState() : bytesSent(0), bytesRecv(0), writable(false) {}
 
         Socket socket;
 

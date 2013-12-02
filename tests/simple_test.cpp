@@ -27,7 +27,6 @@ BOOST_AUTO_TEST_CASE(simple_test)
 
     EndpointProvider provider(listenPort);
 
-
     provider.onNewConnection = [] (ConnectionHandle conn) {
         printf("provider: new %d\n", conn);;
     };

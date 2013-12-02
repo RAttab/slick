@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <cassert>
+
 #include <functional>
 #include <unordered_map>
 #include <sys/epoll.h>
@@ -66,21 +68,9 @@ struct SourcePoller
         add(source.fd(), [=] { pSource->poll(); });
     }
 
-    void add(int fd, const SourceFn& fn)
-    {
-        sources[fd] = fn;
-        poller.add(fd);
-    }
-
-    void del(int fd) { sources.erase(fd); }
-
-    void poll(size_t timeout = 0)
-    {
-        while (poller.poll(timeout)) {
-            struct epoll_event ev = poller.next();
-            sources[ev.data.fd]();
-        }
-    }
+    void add(int fd, const SourceFn& fn);
+    void del(int fd);
+    void poll(size_t timeout = 0);
 
 private:
     Epoll poller;
