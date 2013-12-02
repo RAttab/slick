@@ -53,6 +53,20 @@ struct Payload
         return *this;
     }
 
+    Payload(Payload&& other) : size_(other.size_), bytes_(other.bytes_)
+    {
+        other.bytes_ = nullptr;
+    }
+
+    Payload& operator= (Payload&& other)
+    {
+        size_ = other.size_;
+        bytes_ = other.bytes_;
+        other.bytes_ = nullptr;
+        return *this;
+    }
+
+
     uint8_t* bytes() const { return bytes_; }
     size_t size() const { return size_; }
 
