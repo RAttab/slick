@@ -16,7 +16,7 @@ project(slick)
 
 enable_testing()
 
-add_definitions("-std=c++11 -Wall -Wextra -Werror -pedantic -g -O4")
+add_definitions("-Wall -Wextra -Werror -pedantic -g -O4")
 include_directories("${PROJECT_SOURCE_DIR}/src")
 
 link_libraries(rt)
@@ -25,6 +25,21 @@ link_libraries(pthread)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+#------------------------------------------------------------------------------#
+# COMPILER TESTS
+#------------------------------------------------------------------------------#
+
+include(CheckCXXCompilerFlag)
+
+check_cxx_compiler_flag(-std=c++11 SLICK_FLAG_C11)
+check_cxx_compiler_flag(-std=c++0x SLICK_FLAG_C0X)
+
+if (SLICK_FLAG_C11)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+elseif (SLICK_FLAG_C0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+endif()
 
 
 #------------------------------------------------------------------------------#
