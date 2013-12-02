@@ -22,7 +22,7 @@ Notify::
 Notify()
 {
     fd_ = eventfd(0, EFD_NONBLOCK);
-    SLICK_CHECK_ERRNO(fd_ >= 0, "notify.eventfd");
+    SLICK_CHECK_ERRNO(fd_ >= 0, "Notify.eventfd");
 }
 
 Notify::
@@ -36,7 +36,7 @@ poll()
     int ret = read(fd_, &val, sizeof val);
 
     if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return false;
-    SLICK_CHECK_ERRNO(!ret, "notify.read");
+    SLICK_CHECK_ERRNO(!ret, "Notify.read");
 
     return true;
 }
@@ -47,7 +47,7 @@ signal()
 {
     eventfd_t val = 1;
     int ret = eventfd_write(fd_, val);
-    SLICK_CHECK_ERRNO(!ret, "notify.write");
+    SLICK_CHECK_ERRNO(!ret, "Notify.write");
 }
 
 } // slick

@@ -41,7 +41,7 @@ struct InterfaceIt
 
         int ret = getaddrinfo(host, portStr.c_str(), &hints, &first);
         if (ret) {
-            SLICK_CHECK_ERRNO(ret != EAI_SYSTEM, "getaddrinfo");
+            SLICK_CHECK_ERRNO(ret != EAI_SYSTEM, "InterfaceIt.getaddrinfo");
             throw std::logic_error("error: " + std::to_string(ret));
         }
 
@@ -131,7 +131,7 @@ accept(int fd, int flags)
     socket.fd_ = accept4(fd, &socket.addr, &socket.addrlen, flags);
     if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return std::move(socket);
-    SLICK_CHECK_ERRNO(socket.fd_ >= 0, "accept");
+    SLICK_CHECK_ERRNO(socket.fd_ >= 0, "Socket.accept");
 
     socket.init();
     return std::move(socket);
@@ -143,7 +143,7 @@ init()
 {
     int val = true;
     int ret = setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &val, sizeof val);
-    SLICK_CHECK_ERRNO(!ret, "setsockopt.TCP_NODELAY");
+    SLICK_CHECK_ERRNO(!ret, "Socket.setsockopt.TCP_NODELAY");
 }
 
 Socket::
@@ -152,7 +152,7 @@ Socket::
     if (fd_ < 0) return;
 
     int ret = shutdown(fd_, SHUT_RDWR);
-    SLICK_CHECK_ERRNO(ret != -1, "disconnect.shutdown");
+    SLICK_CHECK_ERRNO(ret != -1, "Socket.shutdown");
 
     ret = close(fd_);
     SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");

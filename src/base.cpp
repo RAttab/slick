@@ -46,7 +46,7 @@ poll()
     while(poller.poll()) {
 
         struct epoll_event ev = poller.next();
-        SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "epoll_wait.EPOLLERR");
+        SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "EndpointBase.epoll_wait.EPOLLERR");
 
         if (connections.count(ev.data.fd)) {
             if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
@@ -104,7 +104,7 @@ recvPayload(int fd)
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             if (errno == EINTR) continue;
-            SLICK_CHECK_ERRNO(read != -1, "recv");
+            SLICK_CHECK_ERRNO(read != -1, "EndpointBase.recv");
         }
 
         assert(read < bufferLength);
@@ -148,8 +148,7 @@ bool sendTo(EndpointBase::ConnectionState& connection, Payload&& data)
     }
 
     else if (errno == ECONNRESET || errno == EPIPE) return false;
-
-    SLICK_CHECK_ERRNO(sent >= 0, "send.header");
+    SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
 
     connection.bytesSent += sent;
     return true;

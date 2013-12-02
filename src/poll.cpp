@@ -21,7 +21,7 @@ Epoll::
 Epoll() : nextEvent(0), numEvents(0)
 {
     fd_ = epoll_create(1);
-    SLICK_CHECK_ERRNO(fd_ != -1, "epoll_create");
+    SLICK_CHECK_ERRNO(fd_ != -1, "Epoll.epoll_create");
 }
 
 Epoll::
@@ -41,7 +41,7 @@ add(int fd, int flags)
     ev.events = flags;
 
     int ret = epoll_ctl(fd_, EPOLL_CTL_ADD, fd, &ev);
-    SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.add");
+    SLICK_CHECK_ERRNO(ret != -1, "Epoll.epoll_ctl.add");
 }
 
 
@@ -50,7 +50,7 @@ Epoll::
 del(int fd)
 {
     int ret = epoll_ctl(fd_, EPOLL_CTL_DEL, fd, nullptr);
-    SLICK_CHECK_ERRNO(ret != -1, "epoll_ctl.del");
+    SLICK_CHECK_ERRNO(ret != -1, "Epoll.epoll_ctl.del");
 }
 
 
@@ -69,7 +69,7 @@ poll(int timeoutMs)
     while (nextEvent == numEvents) {
         int n = epoll_wait(fd_, events, MaxEvents, timeoutMs);
         if (n < 0 && errno == EINTR) continue;
-        SLICK_CHECK_ERRNO(n >= 0, "epoll_wait");
+        SLICK_CHECK_ERRNO(n >= 0, "Epoll.epoll_wait");
 
         numEvents = n;
         nextEvent = 0;
