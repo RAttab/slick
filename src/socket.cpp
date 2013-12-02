@@ -26,20 +26,20 @@ namespace slick {
 
 struct InterfaceIt
 {
-    InterfaceIt(const std::string& host, Port port) :
+    InterfaceIt(const char* host, Port port) :
         first(nullptr), cur(nullptr)
     {
         struct addrinfo hints;
         std::memset(&hints, 0, sizeof hints);
 
-        hints.ai_flags = host.empty() ? AI_PASSIVE : 0;
+        hints.ai_flags = host ? AI_PASSIVE : 0;
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
-        assert(!host.empty() || port);
+        assert(!host || port);
         std::string portStr = std::to_string(port);
 
-        int ret = getaddrinfo(host.c_str(), portStr.c_str(), &hints, &first);
+        int ret = getaddrinfo(host, portStr.c_str(), &hints, &first);
         if (ret) {
             SLICK_CHECK_ERRNO(ret != EAI_SYSTEM, "getaddrinfo");
             throw std::logic_error("error: " + std::to_string(ret));
@@ -75,7 +75,10 @@ Socket::
 Socket(const std::string& host, PortRange ports, int flags) :
     fd_(-1)
 {
-    for (InterfaceIt it(host, ports.first); it; it++) {
+    assert(!host.empty());
+    Port port = ports.first;
+
+    for (InterfaceIt it(host.c_str(), port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
@@ -138,11 +141,11 @@ Socket::
 PassiveSockets::
 PassiveSockets(PortRange ports, int flags)
 {
-    // \todo Need to support multiple ports.
-    Port port = ports.first;
+    Port port = ports.first; // \todo Need to support multiple ports.
 
     for (InterfaceIt it(nullptr, port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
+        SLICK_CHECK_ERRNO(fd < 0, "PassiveSocket");
         if (fd < 0) continue;
 
         FdGuard guard(fd);
