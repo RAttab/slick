@@ -110,8 +110,17 @@ private:
         Message(const Message&) = delete;
         Message& operator=(const Message&) = delete;
 
-        Message(Message&&) = default;
-        Message& operator=(Message&&) = default;
+        Message(Message&& other) :
+            conn(std::move(other.conn)),
+            data(std::move(other.data))
+        {}
+
+        Message& operator=(Message&& other)
+        {
+            conn = std::move(other.conn);
+            data = std::move(other.data);
+            return *this;
+        }
 
 
         bool isBroadcast() const { return conn < 0; }
