@@ -24,9 +24,14 @@ namespace slick {
 /* SLICK CHECK                                                                */
 /******************************************************************************/
 
+inline std::string checkErrnoString(int err, const std::string& msg)
+{
+    return msg + ": " + strerror(err);
+}
+
 inline std::string checkErrnoString(const std::string& msg)
 {
-    return msg + ": " + strerror(errno);
+    return checkErrnoString(errno, msg);
 }
 
 #define SLICK_CHECK_ERRNO(pred,msg)                             \

@@ -46,9 +46,14 @@ poll()
     while(poller.poll()) {
 
         struct epoll_event ev = poller.next();
-        SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR), "EndpointBase.epoll_wait.EPOLLERR");
 
         if (connections.count(ev.data.fd)) {
+
+            if (ev.events & EPOLLERR) {
+                printf("badf(%d)\n", ev.data.fd);
+                connections[ev.data.fd].socket.throwError();
+            }
+
             if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
 
             if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
@@ -59,10 +64,15 @@ poll()
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
-        else if (ev.data.fd == messagesFd.fd())
+        else if (ev.data.fd == messagesFd.fd()) {
+            SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR),
+                    "EndpointBase.meesageFd.EPOLLERR");
             flushMessages();
+        }
 
-        else onPollEvent(ev);
+        else {
+            onPollEvent(ev);
+        }
     }
 }
 

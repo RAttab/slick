@@ -71,32 +71,6 @@ private:
 /* SOCKET                                                                     */
 /******************************************************************************/
 
-Socket::
-Socket(const std::string& host, PortRange ports, int flags) :
-    fd_(-1)
-{
-    assert(!host.empty());
-    Port port = ports.first;
-
-    for (InterfaceIt it(host.c_str(), port); it; it++) {
-        int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
-        if (fd < 0) continue;
-
-        FdGuard guard(fd);
-
-        int ret = connect(fd, it->ai_addr, it->ai_addrlen);
-        if (ret < 0 && errno != EINPROGRESS) continue;
-
-        fd_ = guard.release();
-
-        addrlen = it->ai_addrlen;
-        std::memcpy(&addr, &it->ai_addr, sizeof addr);
-    }
-
-    if (fd_ < 0) throw std::runtime_error("ERROR: no valid interface");
-    init();
-}
-
 
 Socket::
 Socket(Socket&& other) :
@@ -122,7 +96,35 @@ operator=(Socket&& other)
 }
 
 
-Socket&&
+Socket::
+Socket(const std::string& host, PortRange ports, int flags) :
+    fd_(-1)
+{
+    assert(!host.empty());
+    Port port = ports.first;
+
+    for (InterfaceIt it(host.c_str(), port); it; it++) {
+        int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
+        if (fd < 0) continue;
+
+        FdGuard guard(fd);
+
+        int ret = connect(fd, it->ai_addr, it->ai_addrlen);
+        if (ret < 0 && errno != EINPROGRESS) continue;
+
+        fd_ = guard.release();
+
+        addrlen = it->ai_addrlen;
+        std::memcpy(&addr, &it->ai_addr, sizeof addr);
+        break;
+    }
+
+    if (fd_ < 0) throw std::runtime_error("ERROR: no valid interface");
+    init();
+}
+
+
+Socket
 Socket::
 accept(int fd, int flags)
 {
@@ -152,10 +154,31 @@ Socket::
     if (fd_ < 0) return;
 
     int ret = shutdown(fd_, SHUT_RDWR);
-    SLICK_CHECK_ERRNO(ret != -1, "Socket.shutdown");
+    SLICK_CHECK_ERRNO(!ret, "Socket.shutdown");
 
     ret = close(fd_);
-    SLICK_CHECK_ERRNO(ret != -1, "disconnect.close");
+    SLICK_CHECK_ERRNO(!ret, "Socket.close");
+}
+
+int 
+Socket::
+error() const
+{
+    int error = 0;
+    socklen_t errlen = sizeof error;
+
+    int ret = getsockopt(fd_, SOL_SOCKET, SO_ERROR, &error, &errlen);
+    SLICK_CHECK_ERRNO(!ret, "Socket.getsockopt.error");
+
+    return error;
+}
+
+void 
+Socket::
+throwError() const
+{
+    int err = error();
+    if (err) throw std::runtime_error(checkErrnoString(err, "Socket.error"));
 }
 
 

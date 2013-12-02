@@ -72,8 +72,10 @@ struct Socket
     Socket& operator=(Socket&& other);
 
     int fd() const { return fd_; }
+    int error() const;
+    void throwError() const;
 
-    static Socket&& accept(int passiveFd, int flags = 0);
+    static Socket accept(int passiveFd, int flags = 0);
 
 private:
     void init();
