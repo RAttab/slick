@@ -17,8 +17,6 @@ namespace slick {
 /* ENDPOINT CLIENT                                                            */
 /******************************************************************************/
 
-typedef FdGuard ConnectionGuard;
-
 struct EndpointClient : public EndpointBase
 {
     EndpointClient() {}
@@ -30,6 +28,31 @@ struct EndpointClient : public EndpointBase
 
 private:
     std::shared_ptr<Naming> name;
+};
+
+
+/******************************************************************************/
+/* CONNECTION                                                                 */
+/******************************************************************************/
+
+struct Connection
+{
+    Connection(EndpointClient& client, const std::string& host, Port port) :
+        client(client), host_(host), port_(port)
+    {
+        conn = client.connect(host, port);
+    }
+
+    ~Connection() { client.disconnect(conn); }
+
+    const std::string& host() const { return host_; }
+    Port port() const { return port_; }
+
+private:
+    EndpointClient& client;
+    ConnectionHandle conn;
+    std::string host_;
+    Port port_;
 };
 
 } // slick

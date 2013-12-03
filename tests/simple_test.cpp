@@ -25,7 +25,10 @@ BOOST_AUTO_TEST_CASE(simple_test)
     enum { Pings = 10 };
     size_t pingRecv = 0, pongRecv = 0;
 
+    SourcePoller poller;
+
     EndpointProvider provider(listenPort);
+    poller.add(provider);
 
     provider.onNewConnection = [] (ConnectionHandle conn) {
         printf("provider: new %d\n", conn);;
@@ -42,6 +45,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
     };
 
     EndpointClient client;
+    poller.add(client);
 
     client.onNewConnection = [] (ConnectionHandle conn) {
         printf("client: new %d\n", conn);;
@@ -56,11 +60,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
         pongRecv++;
     };
 
-    ConnectionGuard conn(client.connect("localhost", listenPort));
-
-    SourcePoller poller;
-    poller.add(provider);
-    poller.add(client);
+    Connection conn(client, "localhost", listenPort);
 
     std::atomic<bool> shutdown(false);
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
