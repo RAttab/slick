@@ -8,6 +8,7 @@
 #include "notify.h"
 #include "utils.h"
 
+#include <cassert>
 #include <unistd.h>
 #include <sys/eventfd.h>
 
@@ -33,12 +34,17 @@ Notify::
 poll()
 {
     eventfd_t val;
-    int ret = read(fd_, &val, sizeof val);
+    while (true) {
+        ssize_t ret = read(fd_, &val, sizeof val);
+        if (ret >= 0) return true;
 
-    if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return false;
-    SLICK_CHECK_ERRNO(!ret, "Notify.read");
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
+        SLICK_CHECK_ERRNO(!ret, "Notify.read");
+    }
 
-    return true;
+    assert(false);
+    return false;
 }
 
 void
