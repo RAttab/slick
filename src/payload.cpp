@@ -20,6 +20,19 @@ namespace slick {
 
 namespace proto {
 
+
+/******************************************************************************/
+/* BUFFER                                                                     */
+/******************************************************************************/
+
+Payload fromBuffer(const uint8_t* buffer, size_t bufferSize)
+{
+    size_t size = *reinterpret_cast<const uint16_t*>(buffer);
+    if (size > bufferSize) return Payload();
+    return Payload(buffer + 2, size);
+}
+
+
 /******************************************************************************/
 /* CHUNKED HTTP                                                               */
 /******************************************************************************/

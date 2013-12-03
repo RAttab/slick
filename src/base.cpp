@@ -101,35 +101,57 @@ disconnect(int fd)
     if (onLostConnection) onLostConnection(fd);
 }
 
+uint8_t*
+EndpointBase::
+processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
+{
+    uint8_t* it = first;
+
+    while (it < last) {
+        size_t leftover = last - it;
+        Payload data = proto::fromBuffer(it, leftover);
+
+        if (!data.packetSize()) {
+            std::copy(it, last, first);
+            return first + leftover;
+        }
+
+        it += data.packetSize();
+        onPayload(fd, std::move(data));
+    }
+
+    assert(it == last);
+    return last;
+}
 
 void
 EndpointBase::
 recvPayload(int fd)
 {
-    auto it = connections.find(fd);
-    assert(it != connections.end());
+    auto conn = connections.find(fd);
+    assert(conn != connections.end());
 
     enum { bufferLength = 1U << 16 };
     uint8_t buffer[bufferLength];
+    uint8_t* bufferIt = buffer;
 
     while (true) {
-        ssize_t read = recv(fd, buffer, bufferLength, 0);
+        ssize_t read = recv(fd, bufferIt, (buffer + bufferLength) - bufferIt, 0);
+
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             if (errno == EINTR) continue;
             SLICK_CHECK_ERRNO(read != -1, "EndpointBase.recv");
         }
 
-        assert(read < bufferLength);
         if (!read) { // indicates that shutdown was called on the connection side.
             disconnect(fd);
             break;
         }
 
-        it->second.bytesRecv += read;
-        onPayload(fd, Payload(buffer, read));
+        conn->second.bytesRecv += read;
+        bufferIt = processRecvBuffer(fd, buffer, bufferIt + read);
     }
-
 }
 
 
@@ -139,31 +161,31 @@ namespace {
 // it part of the header.
 
 template<typename Payload>
-bool sendTo(EndpointBase::ConnectionState& connection, Payload&& data)
+bool sendTo(EndpointBase::ConnectionState& conn, Payload&& data)
 {
-    (void) connection;
+    (void) conn;
     (void) data;
 
-    if (!connection.writable) {
-        connection.sendQueue.emplace_back(std::forward<Payload>(data));
+    if (!conn.writable) {
+        conn.sendQueue.emplace_back(std::forward<Payload>(data));
         return true;
     }
-    ssize_t sent =
-        send(connection.socket.fd(), data.bytes(), data.size(), MSG_NOSIGNAL);
+    ssize_t sent = send(
+            conn.socket.fd(), data.packet(), data.packetSize(), MSG_NOSIGNAL);
     if (sent >= 0) {
-        assert(size_t(sent) == data.size());
+        assert(size_t(sent) == data.packetSize());
         return true;
     }
 
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        connection.sendQueue.emplace_back(std::forward<Payload>(data));
+        conn.sendQueue.emplace_back(std::forward<Payload>(data));
         return true;
     }
 
     else if (errno == ECONNRESET || errno == EPIPE) return false;
     SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
 
-    connection.bytesSent += sent;
+    conn.bytesSent += sent;
     return true;
 }
 

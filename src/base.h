@@ -76,6 +76,8 @@ private:
     void flushQueue(int fd);
     void flushMessages();
 
+    uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
+
     size_t pollThread;
 
     struct ConnectionState

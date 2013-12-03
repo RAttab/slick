@@ -90,8 +90,11 @@ struct Payload
     const uint8_t* bytes() const { return bytes_; }
     size_t size() const { return *reinterpret_cast<const SizeT*>(start()); }
 
-    const uint8_t* packet() const { return start(); }
-    size_t packetSize() const { return pSize(start()) + sizeof(SizeT); }
+    const uint8_t* packet() const { return bytes_ ? start() : nullptr; }
+    size_t packetSize() const
+    {
+        return bytes_ ? pSize(start()) + sizeof(SizeT) : 0ULL;
+    }
 
 private:
 
@@ -150,6 +153,7 @@ inline Payload fromString(const char* msg)
     return fromString(msg, std::strlen(msg));
 }
 
+Payload fromBuffer(const uint8_t* buffer, size_t bufferSize);
 
 } // namespace pl
 

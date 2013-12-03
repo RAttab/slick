@@ -66,10 +66,8 @@ BOOST_AUTO_TEST_CASE(simple_test)
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
     std::thread pollTh(pollFn);
 
-    for (size_t i = 0; i < Pings; ++i) {
+    for (size_t i = 0; i < Pings; ++i)
         client.broadcast(proto::fromString(string("PING") + to_string(i)));
-        slick::sleep(1);
-    }
 
     slick::sleep(100);
     shutdown = true;
