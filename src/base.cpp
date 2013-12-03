@@ -49,10 +49,8 @@ poll()
 
         if (connections.count(ev.data.fd)) {
 
-            if (ev.events & EPOLLERR) {
-                printf("badf(%d)\n", ev.data.fd);
+            if (ev.events & EPOLLERR)
                 connections[ev.data.fd].socket.throwError();
-            }
 
             if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
 
@@ -83,9 +81,13 @@ connect(Socket&& socket)
 {
     poller.add(socket.fd(), EPOLLET | EPOLLIN | EPOLLOUT);
 
+    int fd = socket.fd();
+
     ConnectionState connection;
     connection.socket = std::move(socket);
     connections[connection.socket.fd()] = std::move(connection);
+
+    if (onNewConnection) onNewConnection(fd);
 }
 
 
@@ -95,7 +97,8 @@ disconnect(int fd)
 {
     poller.del(fd);
     connections.erase(fd);
-    onLostConnection(fd);
+
+    if (onLostConnection) onLostConnection(fd);
 }
 
 

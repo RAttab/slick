@@ -27,7 +27,11 @@ Notify()
 }
 
 Notify::
-~Notify() { close(fd_); }
+~Notify()
+{
+    int ret = close(fd_);
+    SLICK_CHECK_ERRNO(!ret, "Notify.close");
+}
 
 bool
 Notify::

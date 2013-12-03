@@ -35,7 +35,7 @@ struct Payload
         size_(size)
     {
         bytes_ = (uint8_t*) std::malloc(size);
-        std::memcpy((void*) src, (void*) bytes_, size);
+        std::memcpy((void*) bytes_, (void*) src, size);
     }
 
     Payload(TakeOwnershipT, uint8_t* src, size_t size) :

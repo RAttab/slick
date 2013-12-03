@@ -48,7 +48,12 @@ struct Queue
     T pop()
     {
         assert(!empty());
-        return std::move(queue[d.split.read++ % Size]);
+
+        uint32_t pos = d.split.read % Size;
+        T val = std::move(queue[pos]);
+
+        d.split.read++;
+        return std::move(val);
     }
 
     template<typename Val>

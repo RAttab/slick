@@ -27,7 +27,8 @@ Epoll() : nextEvent(0), numEvents(0)
 Epoll::
 ~Epoll()
 {
-    close(fd_);
+    int ret = close(fd_);
+    SLICK_CHECK_ERRNO(!ret, "Epoll.close");
 }
 
 void

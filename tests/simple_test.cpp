@@ -22,7 +22,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
 {
     const Port listenPort = 20000;
 
-    enum { Pings = 10000 };
+    enum { Pings = 10 };
     size_t pingRecv = 0, pongRecv = 0;
 
     EndpointProvider provider(listenPort);
@@ -42,7 +42,6 @@ BOOST_AUTO_TEST_CASE(simple_test)
     };
 
     EndpointClient client;
-    ConnectionGuard conn(client.connect("localhost", listenPort));
 
     client.onNewConnection = [] (ConnectionHandle conn) {
         printf("client: new %d\n", conn);;
@@ -57,6 +56,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
         pongRecv++;
     };
 
+    ConnectionGuard conn(client.connect("localhost", listenPort));
 
     SourcePoller poller;
     poller.add(provider);
@@ -66,10 +66,12 @@ BOOST_AUTO_TEST_CASE(simple_test)
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
     std::thread pollTh(pollFn);
 
-    for (size_t i = 0; i < Pings; ++i)
-        client.broadcast(Payload::fromString("PING"));
+    for (size_t i = 0; i < Pings; ++i) {
+        client.broadcast(Payload::fromString(string("PING") + to_string(i)));
+        slick::sleep(1);
+    }
 
-    slick::sleep(10);
+    slick::sleep(100);
     shutdown = true;
     pollTh.join();
 
