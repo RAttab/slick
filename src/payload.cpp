@@ -18,10 +18,13 @@
 
 namespace slick {
 
+namespace proto {
 
 /******************************************************************************/
 /* CHUNKED HTTP                                                               */
 /******************************************************************************/
+
+#if 0
 
 Payload
 Payload::
@@ -91,5 +94,8 @@ fromChunkedHttp(const Payload& msg)
     return Payload(TakeOwnership, bytes.release(), size);
 }
 
+#endif
+
+} // namespace proto
 
 } // slick

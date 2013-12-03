@@ -31,16 +31,16 @@ BOOST_AUTO_TEST_CASE(simple_test)
     poller.add(provider);
 
     provider.onNewConnection = [] (ConnectionHandle conn) {
-        printf("provider: new %d\n", conn);;
+        printf("prv: new %d\n", conn);;
     };
     provider.onLostConnection = [] (ConnectionHandle conn) {
-        printf("provider: lost %d\n", conn);;
+        printf("prv: lost %d\n", conn);;
     };
 
     provider.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
-        std::string msg = Payload::toString(data);
-        printf("provider: got(%d) %s\n", conn, msg.c_str());
-        provider.broadcast(Payload::fromString("PONG"));
+        std::string msg = proto::toString(data);
+        printf("prv: got(%d) %s\n", conn, msg.c_str());
+        provider.broadcast(proto::fromString("PONG"));
         pingRecv++;
     };
 
@@ -48,15 +48,15 @@ BOOST_AUTO_TEST_CASE(simple_test)
     poller.add(client);
 
     client.onNewConnection = [] (ConnectionHandle conn) {
-        printf("client: new %d\n", conn);;
+        printf("cli: new %d\n", conn);;
     };
     client.onLostConnection = [] (ConnectionHandle conn) {
-        printf("client: lost %d\n", conn);;
+        printf("cli: lost %d\n", conn);;
     };
 
     client.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
-        std::string msg = Payload::toString(data);
-        printf("client: got(%d) %s\n", conn, msg.c_str());
+        std::string msg = proto::toString(data);
+        printf("cli: got(%d) %s\n", conn, msg.c_str());
         pongRecv++;
     };
 
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
     std::thread pollTh(pollFn);
 
     for (size_t i = 0; i < Pings; ++i) {
-        client.broadcast(Payload::fromString(string("PING") + to_string(i)));
+        client.broadcast(proto::fromString(string("PING") + to_string(i)));
         slick::sleep(1);
     }
 
