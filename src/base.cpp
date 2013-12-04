@@ -121,7 +121,7 @@ processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
     }
 
     assert(it == last);
-    return last;
+    return first;
 }
 
 void
