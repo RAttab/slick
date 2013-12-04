@@ -27,8 +27,8 @@ namespace proto {
 
 Payload fromBuffer(const uint8_t* buffer, size_t bufferSize)
 {
-    size_t size = *reinterpret_cast<const uint16_t*>(buffer);
-    if (size > bufferSize) return Payload();
+    size_t size = *reinterpret_cast<const Payload::SizeT*>(buffer);
+    if (size + sizeof(Payload::SizeT) > bufferSize) return Payload();
     return Payload(buffer + 2, size);
 }
 

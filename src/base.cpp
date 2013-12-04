@@ -151,6 +151,7 @@ recvPayload(int fd)
 
         conn->second.bytesRecv += read;
         bufferIt = processRecvBuffer(fd, buffer, bufferIt + read);
+        assert(bufferIt < (buffer + bufferLength));
     }
 }
 
