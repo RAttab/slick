@@ -113,6 +113,7 @@ disconnect(int fd)
     if (onLostConnection) onLostConnection(fd);
 }
 
+
 uint8_t*
 EndpointBase::
 processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
@@ -176,13 +177,11 @@ namespace {
 template<typename Payload>
 bool sendTo(EndpointBase::ConnectionState& conn, Payload&& data)
 {
-    (void) conn;
-    (void) data;
-
     if (!conn.writable) {
         conn.sendQueue.emplace_back(std::forward<Payload>(data));
         return true;
     }
+
     ssize_t sent = send(
             conn.socket.fd(), data.packet(), data.packetSize(), MSG_NOSIGNAL);
     if (sent >= 0) {

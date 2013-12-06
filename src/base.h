@@ -76,8 +76,8 @@ private:
     void recvPayload(int fd);
     void flushQueue(int fd);
     void flushMessages();
-
     uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
+
 
     size_t pollThread;
 
@@ -94,8 +94,8 @@ private:
         std::vector<Payload> sendQueue;
     };
 
-
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
+
 
     struct Message
     {
