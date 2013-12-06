@@ -39,8 +39,9 @@ struct EndpointBase
     void poll();
     void shutdown();
 
-    std::function<void(ConnectionHandle h)> onNewConnection;
-    std::function<void(ConnectionHandle h)> onLostConnection;
+    typedef std::function<void(ConnectionHandle h)> ConnectionFn;
+    ConnectionFn onNewConnection;
+    ConnectionFn onLostConnection;
 
     std::function<void(ConnectionHandle h, Payload&& d)> onPayload;
 
@@ -98,37 +99,58 @@ private:
 
     struct Message
     {
+        enum Type { Unicast, Broadcast, Connect, Disconnect };
+
         Message() : conn(-1) {}
 
         template<typename Payload>
         Message(Payload&& data) :
-            conn(-1), data(std::forward<Payload>(data))
+            type(Broadcast), data(std::forward<Payload>(data))
         {}
 
         Message(ConnectionHandle conn, Payload&& data) :
-            conn(conn), data(std::move(data))
+            type(Unicast), conn(conn), data(std::move(data))
         {}
 
-        Message(const Message&) = delete;
-        Message& operator=(const Message&) = delete;
+        Message(Socket&& socket) :
+            type(Connect), connectSocket(std::move(socket))
+        {}
+
+        explicit Message(ConnectionHandle disconnectFd) :
+            type(Disconnect), disconnectFd(disconnectFd)
+        {}
 
         Message(Message&& other) :
-            conn(std::move(other.conn)),
-            data(std::move(other.data))
+            type(other.type),
+            conn(other.conn),
+            data(std::move(other.data)),
+            connectSocket(std::move(other.connectSocket)),
+            disconnectFd(other.disconnectFd)
         {}
 
         Message& operator=(Message&& other)
         {
-            conn = std::move(other.conn);
+            type = other.type,
+
+            conn = other.conn;
             data = std::move(other.data);
+
+            connectSocket = std::move(other.connectSocket);
+            disconnectFd = other.disconnectFd;
+
             return *this;
         }
 
+        Message(const Message&) = delete;
+        Message& operator=(const Message&) = delete;
 
-        bool isBroadcast() const { return conn < 0; }
+        Type type;
 
         ConnectionHandle conn;
         Payload data;
+
+        Socket connectSocket;
+        int disconnectFd;
     };
 
     Queue<Message, 1U << 6> messages;

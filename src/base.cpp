@@ -79,6 +79,12 @@ void
 EndpointBase::
 connect(Socket&& socket)
 {
+    if (threadId() != pollThread) {
+        messages.push(Message(std::move(socket)));
+        messagesFd.signal();
+        return;
+    }
+
     poller.add(socket.fd(), EPOLLET | EPOLLIN | EPOLLOUT);
 
     int fd = socket.fd();
@@ -95,6 +101,12 @@ void
 EndpointBase::
 disconnect(int fd)
 {
+    if (threadId() != pollThread) {
+        messages.push(Message(fd));
+        messagesFd.signal();
+        return;
+    }
+
     poller.del(fd);
     connections.erase(fd);
 
@@ -256,13 +268,22 @@ void
 EndpointBase::
 flushMessages()
 {
+    assert(threadId() == pollThread);
+
     while (messagesFd.poll()) {
         while (!messages.empty()) {
             Message msg = messages.pop();
 
-            if (msg.isBroadcast())
-                broadcast(std::move(msg.data));
-            else send(msg.conn, std::move(msg.data));
+            switch(msg.type) {
+
+            case Message::Unicast: send(msg.conn, std::move(msg.data)); break;
+            case Message::Broadcast: broadcast(std::move(msg.data)); break;
+
+            case Message::Connect: connect(std::move(msg.connectSocket)); break;
+            case Message::Disconnect: disconnect(msg.disconnectFd); break;
+
+            default: assert(false);
+            }
         }
     }
 }
