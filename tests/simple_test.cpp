@@ -18,7 +18,7 @@ using namespace std;
 using namespace slick;
 
 
-BOOST_AUTO_TEST_CASE(simple_test)
+BOOST_AUTO_TEST_CASE(basics)
 {
     const Port listenPort = 20000;
 
@@ -81,3 +81,100 @@ BOOST_AUTO_TEST_CASE(simple_test)
     BOOST_CHECK_EQUAL(Pings, pingRecv);
     BOOST_CHECK_EQUAL(Pings, pongRecv);
 }
+
+
+BOOST_AUTO_TEST_CASE(nice_disconnect)
+{
+    const Port listenPort = 20001;
+
+    std::atomic<bool> gotClient(false);
+    std::atomic<bool> lostClient(false);
+
+    SourcePoller poller;
+
+    EndpointProvider provider(listenPort);
+    poller.add(provider);
+
+    provider.onNewConnection = [&] (ConnectionHandle conn) {
+        gotClient = true;
+        printf("prv: new %d\n", conn);;
+    };
+    provider.onLostConnection = [&] (ConnectionHandle conn) {
+        lostClient = true;
+        printf("prv: lost %d\n", conn);;
+    };
+
+    EndpointClient client;
+    poller.add(client);
+
+    std::atomic<bool> shutdown(false);
+    auto pollFn = [&] { while (!shutdown) poller.poll(); };
+    std::thread pollTh(pollFn);
+
+    slick::sleep(1);
+
+    auto conn = make_shared<Connection>(client, "localhost", listenPort);
+    while (!gotClient);
+
+    conn.reset();
+    while(!lostClient);
+
+    shutdown = true;
+    pollTh.join();
+}
+
+BOOST_AUTO_TEST_CASE(hard_disconnect)
+{
+    const Port listenPort = 20001;
+
+    Fork fork;
+    disableBoostTestSignalHandler();
+
+    if (fork.isParent()) {
+        std::atomic<bool> gotClient(false);
+        std::atomic<bool> lostClient(false);
+
+        SourcePoller poller;
+
+        EndpointProvider provider(listenPort);
+        poller.add(provider);
+
+        provider.onNewConnection = [&] (ConnectionHandle conn) {
+            gotClient = true;
+            printf("prv: new %d\n", conn);;
+        };
+        provider.onLostConnection = [&] (ConnectionHandle conn) {
+            lostClient = true;
+            printf("prv: lost %d\n", conn);;
+        };
+
+        std::atomic<bool> shutdown(false);
+        auto pollFn = [&] { while (!shutdown) poller.poll(); };
+        std::thread pollTh(pollFn);
+
+        while(!gotClient);
+
+        fork.killChild();
+
+        while(!lostClient);
+
+        shutdown = true;
+        pollTh.join();
+    }
+
+    else {
+        SourcePoller poller;
+
+        EndpointClient client;
+        poller.add(client);
+
+        std::atomic<bool> shutdown(false);
+        auto pollFn = [&] { while (!shutdown) poller.poll(); };
+        std::thread pollTh(pollFn);
+
+        Connection conn(client, "localhost", listenPort);
+
+        while(true);
+    }
+}
+

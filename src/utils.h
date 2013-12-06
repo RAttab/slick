@@ -197,4 +197,23 @@ private:
 };
 
 
+/******************************************************************************/
+/* FORK                                                                       */
+/******************************************************************************/
+
+struct Fork
+{
+    Fork();
+    ~Fork();
+
+    bool isParent() const { return pid; }
+    void killChild();
+
+private:
+    int pid;
+    bool killed;
+};
+
+void disableBoostTestSignalHandler();
+
 } // namespace slick
