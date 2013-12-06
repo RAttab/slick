@@ -16,8 +16,8 @@
 namespace slick {
 
 EndpointProvider::
-EndpointProvider(PortRange ports) :
-    sockets(ports, SOCK_NONBLOCK)
+EndpointProvider(Port port) :
+    sockets(port, SOCK_NONBLOCK)
 {
     for (int fd : sockets.fds())
         poller.add(fd, EPOLLET | EPOLLIN);

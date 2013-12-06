@@ -22,7 +22,7 @@ namespace slick {
 
 struct EndpointProvider : public EndpointBase
 {
-    EndpointProvider(PortRange ports);
+    EndpointProvider(Port port);
     ~EndpointProvider();
 
     void publish(std::shared_ptr<Naming> name, const std::string& endpoint);

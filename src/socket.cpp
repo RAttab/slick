@@ -97,11 +97,10 @@ operator=(Socket&& other)
 
 
 Socket::
-Socket(const std::string& host, PortRange ports, int flags) :
+Socket(const std::string& host, Port port, int flags) :
     fd_(-1)
 {
     assert(!host.empty());
-    Port port = ports.first;
 
     for (InterfaceIt it(host.c_str(), port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
@@ -187,16 +186,14 @@ throwError() const
 /******************************************************************************/
 
 PassiveSockets::
-PassiveSockets(PortRange ports, int flags)
+PassiveSockets(Port port, int flags)
 {
-    Port port = ports.first; // \todo Need to support multiple ports.
-
     for (InterfaceIt it(nullptr, port); it; it++) {
+
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
         FdGuard guard(fd);
-
 
         int ret = bind(fd, it->ai_addr, it->ai_addrlen);
         if (ret < 0) continue;

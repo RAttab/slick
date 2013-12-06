@@ -62,7 +62,7 @@ struct PortRange
 struct Socket
 {
     Socket() : fd_(-1) {}
-    Socket(const std::string& host, PortRange ports, int flags = 0);
+    Socket(const std::string& host, Port port, int flags = 0);
     ~Socket();
 
     Socket(const Socket&) = delete;
@@ -92,7 +92,7 @@ private:
 
 struct PassiveSockets
 {
-    explicit PassiveSockets(PortRange ports, int flags = 0);
+    explicit PassiveSockets(Port port, int flags = 0);
     ~PassiveSockets();
 
     PassiveSockets(const PassiveSockets&) = delete;
