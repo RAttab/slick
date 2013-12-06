@@ -52,7 +52,9 @@ poll()
             if (ev.events & EPOLLERR)
                 connections[ev.data.fd].socket.throwError();
 
-            if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
+            if (ev.events & EPOLLIN) {
+                if (!recvPayload(ev.data.fd)) continue;
+            }
 
             if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
                 disconnect(ev.data.fd);
@@ -135,7 +137,7 @@ processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
     return first;
 }
 
-void
+bool
 EndpointBase::
 recvPayload(int fd)
 {
@@ -157,13 +159,15 @@ recvPayload(int fd)
 
         if (!read) { // indicates that shutdown was called on the connection side.
             disconnect(fd);
-            break;
+            return false;
         }
 
         conn->second.bytesRecv += read;
         bufferIt = processRecvBuffer(fd, buffer, bufferIt + read);
         assert(bufferIt < (buffer + bufferLength));
     }
+
+    return true;
 }
 
 

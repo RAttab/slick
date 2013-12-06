@@ -67,9 +67,12 @@ struct SourcePoller
         T* pSource = &source;
         add(source.fd(), [=] { pSource->poll(); });
     }
-
     void add(int fd, const SourceFn& fn);
+
+    template<typename T>
+    void del(T& source) { del(source.fd()); }
     void del(int fd);
+
     void poll(size_t timeout = 0);
 
 private:

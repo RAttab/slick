@@ -73,7 +73,7 @@ protected:
 
 private:
 
-    void recvPayload(int fd);
+    bool recvPayload(int fd);
     void flushQueue(int fd);
     void flushMessages();
     uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
