@@ -100,10 +100,10 @@ private:
 
     void copy(const Payload& other)
     {
-        SizeT size = other.size();
-        const uint8_t* start = other.start();
+        SizeT size = other.packetSize();
+        const uint8_t* start = other.packet();
 
-        std::unique_ptr<uint8_t[]> bytes(new uint8_t[size + sizeof(SizeT)]);
+        std::unique_ptr<uint8_t[]> bytes(new uint8_t[size]);
         std::copy(start, start + size, bytes.get());
 
         bytes_ = bytes.release() + 2;
@@ -135,7 +135,7 @@ Payload toChunkedHttp(const Payload& msg);
 
 inline std::string toString(const Payload& msg)
 {
-    return std::string((char*) msg.bytes(), msg.size());
+    return std::string((const char*) msg.bytes(), msg.size());
 }
 
 inline Payload fromString(const char* msg, size_t size)
