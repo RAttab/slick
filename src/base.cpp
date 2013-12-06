@@ -41,7 +41,7 @@ void
 EndpointBase::
 poll()
 {
-    pollThread = threadId();
+    pollThread = threadId(); // \todo This is a bit flimsy.
 
     while(poller.poll()) {
 
@@ -68,9 +68,7 @@ poll()
             flushMessages();
         }
 
-        else {
-            onPollEvent(ev);
-        }
+        else onPollEvent(ev);
     }
 }
 
