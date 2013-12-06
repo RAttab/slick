@@ -22,7 +22,7 @@ BOOST_AUTO_TEST_CASE(simple_test)
 {
     const Port listenPort = 20000;
 
-    enum { Pings = 10 };
+    enum { Pings = 32 };
     size_t pingRecv = 0, pongRecv = 0;
 
     SourcePoller poller;
@@ -66,8 +66,13 @@ BOOST_AUTO_TEST_CASE(simple_test)
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
     std::thread pollTh(pollFn);
 
-    for (size_t i = 0; i < Pings; ++i)
-        client.broadcast(proto::fromString(string("PING") + to_string(i)));
+    for (size_t i = 0; i < Pings; ++i) {
+        stringstream ss; ss << "PING { ";
+        for (size_t j = 0; j <= i; ++j) ss << to_string(j) << " ";
+        ss << "}";
+
+        client.broadcast(proto::fromString(ss.str()));
+    }
 
     slick::sleep(100);
     shutdown = true;
