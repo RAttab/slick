@@ -11,6 +11,7 @@
 #include "provider.h"
 #include "client.h"
 #include "utils.h"
+#include "test_utils.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -22,6 +23,8 @@ namespace { Port portCounter = 20000; }
 
 BOOST_AUTO_TEST_CASE(basics)
 {
+    printTitle("basics", '=');
+
     const Port listenPort = portCounter++;
 
     enum { Pings = 32 };
@@ -86,9 +89,13 @@ BOOST_AUTO_TEST_CASE(basics)
 
 BOOST_AUTO_TEST_CASE(n_to_n)
 {
+    printTitle("n_to_n", '=');
+
     enum { N = 100 };
 
+
     // PROVIDERS ---------------------------------------------------------------
+    printTitle("providers");
 
     const Port listenPortStart = 30000;
 
@@ -109,6 +116,11 @@ BOOST_AUTO_TEST_CASE(n_to_n)
             auto ptr = prov.lock();
             ptr->send(conn, proto::fromInt<size_t>(id + 1));
         };
+
+        providers[id]->onDroppedPayload = [] (ConnectionHandle, Payload&&) {
+            assert(false);
+        };
+
     }
 
     std::atomic<bool> provShutdown(false);
@@ -117,11 +129,16 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
 
     // CLIENTS -----------------------------------------------------------------
+    printTitle("clients");
 
     SourcePoller clientPoller;
 
     EndpointClient client;
     clientPoller.add(client);
+
+    client.onDroppedPayload = [] (ConnectionHandle, Payload&&) {
+        assert(false);
+    };
 
     std::atomic<size_t> provIdSum(0);
     client.onPayload = [&] (ConnectionHandle, Payload&& data) {
@@ -130,22 +147,25 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     array<shared_ptr<Connection>, N> connections;
 
-    for (size_t id = 0; id < N; ++id) {
-        connections[id] = 
-            make_shared<Connection>(client, "localhost", listenPortStart + id);
-    }
-
     std::atomic<bool> clientShutdown(false);
     auto clientPollFn = [&] { while (!clientShutdown) clientPoller.poll(); };
     std::thread clientPollTh(clientPollFn);
 
+    for (size_t id = 0; id < N; ++id) {
+        connections[id] =
+            make_shared<Connection>(client, "localhost", listenPortStart + id);
+    }
+
 
     // TEST --------------------------------------------------------------------
+    printTitle("test");
 
     client.broadcast(proto::fromInt<size_t>(1));
 
     size_t exp = (N * (N + 1)) / 2;
     while (provIdSum != exp);
+
+    printTitle("done");
 
     provShutdown = true;
     clientShutdown = true;
@@ -160,6 +180,8 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
 BOOST_AUTO_TEST_CASE(nice_disconnect)
 {
+    printTitle("nice_disconnecct", '=');
+
     const Port listenPort = portCounter++;
 
     std::atomic<bool> gotClient(false);
@@ -200,6 +222,8 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
 BOOST_AUTO_TEST_CASE(hard_disconnect)
 {
+    printTitle("hard_disconnecct", '=');
+
     const Port listenPort = portCounter++;
 
     Fork fork;

@@ -199,6 +199,7 @@ bool sendTo(EndpointBase::ConnectionState& conn, Payload&& data)
 
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
         conn.sendQueue.emplace_back(std::forward<Payload>(data));
+        assert((conn.sendQueue.size() < 1U) << 8);
         return true;
     }
 
@@ -279,11 +280,17 @@ deferOperation(Operation&& op)
 {
     assert(threadId() != pollThread);
 
-    if (operations.push(std::move(op)))
-        operationsFd.signal();
+    while (!operations.push(std::move(op))) {
 
-    else if (op.isPayload() && onDroppedPayload)
-        onDroppedPayload(op.conn, std::move(op.data));
+        // non-payload ops are unlikely to be in a time-sensitive part of the
+        // code so retrying is acceptable.
+        if (!op.isPayload()) continue;
+
+        if (onDroppedPayload)
+            onDroppedPayload(op.conn, std::move(op.data));
+    }
+
+    operationsFd.signal();
 }
 
 
