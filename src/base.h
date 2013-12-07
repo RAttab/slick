@@ -153,7 +153,7 @@ private:
         int disconnectFd;
     };
 
-    Queue<Message, 1U << 6> messages;
+    Queue<Message, 1U << 8> messages;
     Notify messagesFd;
 };
 

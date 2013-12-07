@@ -17,10 +17,12 @@
 using namespace std;
 using namespace slick;
 
+namespace { Port portCounter = 20000; }
+
 
 BOOST_AUTO_TEST_CASE(basics)
 {
-    const Port listenPort = 20000;
+    const Port listenPort = portCounter++;
 
     enum { Pings = 32 };
     size_t pingRecv = 0, pongRecv = 0;
@@ -82,10 +84,83 @@ BOOST_AUTO_TEST_CASE(basics)
     BOOST_CHECK_EQUAL(Pings, pongRecv);
 }
 
+BOOST_AUTO_TEST_CASE(n_to_n)
+{
+    enum { N = 100 };
+
+    // PROVIDERS ---------------------------------------------------------------
+
+    const Port listenPortStart = 30000;
+
+    SourcePoller provPoller;
+
+    array<shared_ptr<EndpointProvider>, N> providers;
+    array<size_t, N> clientIdSums;
+    clientIdSums.fill(0);
+
+    for (size_t id = 0; id < N; ++id) {
+        providers[id] = make_shared<EndpointProvider>(listenPortStart + id);
+        provPoller.add(*providers[id]);
+
+        weak_ptr<EndpointProvider> prov(providers[id]);
+        providers[id]->onPayload = [=, &clientIdSums] (ConnectionHandle conn, Payload&& data) {
+            clientIdSums[id] += proto::toInt<size_t>(data);
+
+            auto ptr = prov.lock();
+            ptr->send(conn, proto::fromInt<size_t>(id + 1));
+        };
+    }
+
+    std::atomic<bool> provShutdown(false);
+    auto provPollFn = [&] { while (!provShutdown) provPoller.poll(); };
+    std::thread provPollTh(provPollFn);
+
+
+    // CLIENTS -----------------------------------------------------------------
+
+    SourcePoller clientPoller;
+
+    EndpointClient client;
+    clientPoller.add(client);
+
+    std::atomic<size_t> provIdSum(0);
+    client.onPayload = [&] (ConnectionHandle, Payload&& data) {
+        provIdSum += proto::toInt<size_t>(data);
+    };
+
+    array<shared_ptr<Connection>, N> connections;
+
+    for (size_t id = 0; id < N; ++id) {
+        connections[id] = 
+            make_shared<Connection>(client, "localhost", listenPortStart + id);
+    }
+
+    std::atomic<bool> clientShutdown(false);
+    auto clientPollFn = [&] { while (!clientShutdown) clientPoller.poll(); };
+    std::thread clientPollTh(clientPollFn);
+
+
+    // TEST --------------------------------------------------------------------
+
+    client.broadcast(proto::fromInt<size_t>(1));
+
+    size_t exp = (N * (N + 1)) / 2;
+    while (provIdSum != exp);
+
+    provShutdown = true;
+    clientShutdown = true;
+
+    provPollTh.join();
+    clientPollTh.join();
+
+    for (size_t i = 0; i < N; ++i)
+        BOOST_CHECK_EQUAL(clientIdSums[i], 1);
+}
+
 
 BOOST_AUTO_TEST_CASE(nice_disconnect)
 {
-    const Port listenPort = 20001;
+    const Port listenPort = portCounter++;
 
     std::atomic<bool> gotClient(false);
     std::atomic<bool> lostClient(false);
@@ -125,7 +200,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
 BOOST_AUTO_TEST_CASE(hard_disconnect)
 {
-    const Port listenPort = 20001;
+    const Port listenPort = portCounter++;
 
     Fork fork;
     disableBoostTestSignalHandler();
