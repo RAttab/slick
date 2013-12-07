@@ -34,27 +34,29 @@ struct EndpointBase
     EndpointBase(const EndpointBase&) = delete;
     EndpointBase& operator=(const EndpointBase&) = delete;
 
-    int fd() const { return poller.fd(); }
-
-    void poll();
-    void shutdown();
 
     typedef std::function<void(ConnectionHandle h)> ConnectionFn;
     ConnectionFn onNewConnection;
     ConnectionFn onLostConnection;
 
-    std::function<void(ConnectionHandle h, Payload&& d)> onPayload;
+    typedef std::function<void(ConnectionHandle h, Payload&& d)> PayloadFn;
+    PayloadFn onPayload;
+    PayloadFn onDroppedPayload;
 
-    void send(ConnectionHandle client, Payload&& msg);
-    void send(ConnectionHandle client, const Payload& msg)
+
+    int fd() const { return poller.fd(); }
+    void poll();
+
+    void send(ConnectionHandle client, Payload&& data);
+    void send(ConnectionHandle client, const Payload& data)
     {
-        send(client, Payload(msg));
+        send(client, Payload(data));
     }
 
-    void broadcast(Payload&& msg);
-    void broadcast(const Payload& msg)
+    void broadcast(Payload&& data);
+    void broadcast(const Payload& data)
     {
-        broadcast(Payload(msg));
+        broadcast(Payload(data));
     }
 
     // \todo Would be nice to have multicast support.
@@ -74,12 +76,17 @@ protected:
 private:
 
     bool recvPayload(int fd);
-    void flushQueue(int fd);
-    void flushMessages();
     uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
+
+    void flushQueue(int fd);
+
+    struct Operation;
+    void runOperations();
+    void deferOperation(Operation&& op);
 
 
     size_t pollThread;
+
 
     struct ConnectionState
     {
@@ -97,30 +104,30 @@ private:
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
 
 
-    struct Message
+    struct Operation
     {
         enum Type { Unicast, Broadcast, Connect, Disconnect };
 
-        Message() : conn(-1) {}
+        Operation() {}
 
         template<typename Payload>
-        Message(Payload&& data) :
+        Operation(Payload&& data) :
             type(Broadcast), data(std::forward<Payload>(data))
         {}
 
-        Message(ConnectionHandle conn, Payload&& data) :
+        Operation(ConnectionHandle conn, Payload&& data) :
             type(Unicast), conn(conn), data(std::move(data))
         {}
 
-        Message(Socket&& socket) :
+        Operation(Socket&& socket) :
             type(Connect), connectSocket(std::move(socket))
         {}
 
-        explicit Message(ConnectionHandle disconnectFd) :
+        explicit Operation(ConnectionHandle disconnectFd) :
             type(Disconnect), disconnectFd(disconnectFd)
         {}
 
-        Message(Message&& other) :
+        Operation(Operation&& other) :
             type(other.type),
             conn(other.conn),
             data(std::move(other.data)),
@@ -128,7 +135,7 @@ private:
             disconnectFd(other.disconnectFd)
         {}
 
-        Message& operator=(Message&& other)
+        Operation& operator=(Operation&& other)
         {
             type = other.type,
 
@@ -141,8 +148,11 @@ private:
             return *this;
         }
 
-        Message(const Message&) = delete;
-        Message& operator=(const Message&) = delete;
+        Operation(const Operation&) = delete;
+        Operation& operator=(const Operation&) = delete;
+
+        bool isPayload() const { return type == Unicast || type == Broadcast; }
+
 
         Type type;
 
@@ -153,8 +163,8 @@ private:
         int disconnectFd;
     };
 
-    Queue<Message, 1U << 8> messages;
-    Notify messagesFd;
+    Queue<Operation, 1U << 8> operations;
+    Notify operationsFd;
 };
 
 } // slick

@@ -57,15 +57,17 @@ struct Queue
     }
 
     template<typename Val>
-    void push(Val&& val)
+    bool push(Val&& val)
     {
         std::lock_guard<SpinLock> guard(lock);
 
         uint64_t old = d.cursors;
-        assert(wpos(old) - rpos(old) < Size);
+        if (wpos(old) - rpos(old) == Size) return false;
 
         queue[wpos(old) % Size] = std::forward<Val>(val);
-        d.split.write++; // should act as a release barier.
+        d.split.write++; // should act as a release barrier.
+
+        return true;
     }
 
 private:

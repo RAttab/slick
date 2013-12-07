@@ -20,7 +20,7 @@ namespace slick {
 EndpointBase::
 EndpointBase() : pollThread(0)
 {
-    poller.add(messagesFd.fd());
+    poller.add(operationsFd.fd());
 }
 
 
@@ -64,10 +64,10 @@ poll()
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
-        else if (ev.data.fd == messagesFd.fd()) {
+        else if (ev.data.fd == operationsFd.fd()) {
             SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR),
                     "EndpointBase.meesageFd.EPOLLERR");
-            flushMessages();
+            runOperations();
         }
 
         else onPollEvent(ev);
@@ -80,8 +80,7 @@ EndpointBase::
 connect(Socket&& socket)
 {
     if (threadId() != pollThread) {
-        messages.push(Message(std::move(socket)));
-        messagesFd.signal();
+        deferOperation(Operation(std::move(socket)));
         return;
     }
 
@@ -102,9 +101,16 @@ EndpointBase::
 disconnect(int fd)
 {
     if (threadId() != pollThread) {
-        messages.push(Message(fd));
-        messagesFd.signal();
+        deferOperation(Operation(fd));
         return;
+    }
+
+    auto it = connections.find(fd);
+    assert(it != connections.end());
+
+    if (onDroppedPayload) {
+        for (auto& pl : it->second.sendQueue)
+            onDroppedPayload(fd, std::move(pl));
     }
 
     poller.del(fd);
@@ -208,36 +214,39 @@ bool sendTo(EndpointBase::ConnectionState& conn, Payload&& data)
 
 void
 EndpointBase::
-send(int fd, Payload&& msg)
+send(int fd, Payload&& data)
 {
     if (threadId() != pollThread) {
-        messages.push(Message(fd, std::move(msg)));
-        messagesFd.signal();
+        deferOperation(Operation(fd, std::move(data)));
         return;
     }
 
     auto it = connections.find(fd);
-    assert(it != connections.end());
 
-    if (!sendTo(it->second, std::move(msg)))
+    if (it == connections.end()) {
+        if (onDroppedPayload)
+            onDroppedPayload(fd, std::move(data));
+        return;
+    }
+
+    if (!sendTo(it->second, std::move(data)))
         disconnect(it->first);
 }
 
 
 void
 EndpointBase::
-broadcast(Payload&& msg)
+broadcast(Payload&& data)
 {
     if (threadId() != pollThread) {
-        messages.push(Message(std::move(msg)));
-        messagesFd.signal();
+        deferOperation(Operation(std::move(data)));
         return;
     }
 
     std::vector<int> toDisconnect;
 
     for (auto& connection : connections) {
-        if (!sendTo(connection.second, msg))
+        if (!sendTo(connection.second, data))
             toDisconnect.push_back(connection.first);
     }
 
@@ -256,32 +265,45 @@ flushQueue(int fd)
     connection.writable = true;
 
     std::vector<Payload> queue = std::move(connection.sendQueue);
-    for (auto& msg : queue) {
-        if (sendTo(connection, std::move(msg))) continue;
+    for (auto& data : queue) {
+        if (sendTo(connection, std::move(data))) continue;
 
         disconnect(fd);
         break;
     }
 }
 
+void
+EndpointBase::
+deferOperation(Operation&& op)
+{
+    assert(threadId() != pollThread);
+
+    if (operations.push(std::move(op)))
+        operationsFd.signal();
+
+    else if (op.isPayload() && onDroppedPayload)
+        onDroppedPayload(op.conn, std::move(op.data));
+}
+
 
 void
 EndpointBase::
-flushMessages()
+runOperations()
 {
     assert(threadId() == pollThread);
 
-    while (messagesFd.poll()) {
-        while (!messages.empty()) {
-            Message msg = messages.pop();
+    while (operationsFd.poll()) {
+        while (!operations.empty()) {
+            Operation op = operations.pop();
 
-            switch(msg.type) {
+            switch(op.type) {
 
-            case Message::Unicast: send(msg.conn, std::move(msg.data)); break;
-            case Message::Broadcast: broadcast(std::move(msg.data)); break;
+            case Operation::Unicast: send(op.conn, std::move(op.data)); break;
+            case Operation::Broadcast: broadcast(std::move(op.data)); break;
 
-            case Message::Connect: connect(std::move(msg.connectSocket)); break;
-            case Message::Disconnect: disconnect(msg.disconnectFd); break;
+            case Operation::Connect: connect(std::move(op.connectSocket)); break;
+            case Operation::Disconnect: disconnect(op.disconnectFd); break;
 
             default: assert(false);
             }
