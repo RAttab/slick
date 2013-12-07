@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cassert>
 #include <cstring>
+#include <endian.h> // linux specific
 
 namespace slick {
 
@@ -154,6 +155,38 @@ inline Payload fromString(const char* msg)
 }
 
 Payload fromBuffer(const uint8_t* buffer, size_t bufferSize);
+
+
+inline uint8_t  hton(uint8_t  val) { return val; }
+inline uint16_t hton(uint16_t val) { return htobe16(val); }
+inline uint32_t hton(uint32_t val) { return htobe32(val); }
+inline uint64_t hton(uint64_t val) { return htobe64(val); }
+
+inline uint8_t  ntoh(uint8_t  val) { return val; }
+inline uint16_t ntoh(uint16_t val) { return be16toh(val); }
+inline uint32_t ntoh(uint32_t val) { return be32toh(val); }
+inline uint64_t ntoh(uint64_t val) { return be64toh(val); }
+
+
+template<typename Int>
+Int toInt(const Payload& pl)
+{
+    slickStaticAssert(std::is_integral<Int>::value);
+    assert(pl.size() == sizeof(Int));
+
+    Int val = *reinterpret_cast<const Int*>(pl.bytes());
+    return ::slick::proto::ntoh(val);
+}
+
+
+template<typename Int>
+Payload fromInt(Int val)
+{
+    slickStaticAssert(std::is_integral<Int>::value);
+
+    val = ::slick::proto::hton(val);
+    return Payload(reinterpret_cast<const uint8_t*>(&val), sizeof(Int));
+}
 
 } // namespace pl
 
