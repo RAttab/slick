@@ -170,4 +170,21 @@ private:
     Notify operationsFd;
 };
 
+
+/******************************************************************************/
+/* PASSIVE ENDPOINT BASE                                                      */
+/******************************************************************************/
+
+struct PassiveEndpointBase : public EndpointBase
+{
+    PassiveEndpointBase(Port port);
+    virtual ~PassiveEndpointBase();
+
+protected:
+    virtual void onPollEvent(struct epoll_event& ev);
+
+private:
+    PassiveSockets sockets;
+};
+
 } // slick

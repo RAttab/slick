@@ -334,4 +334,43 @@ runOperations()
 }
 
 
+/******************************************************************************/
+/* PASSIVE ENDPOINT BASE                                                      */
+/******************************************************************************/
+
+
+PassiveEndpointBase::
+PassiveEndpointBase(Port port) :
+    sockets(port, SOCK_NONBLOCK)
+{
+    for (int fd : sockets.fds())
+        poller.add(fd, EPOLLET | EPOLLIN);
+}
+
+
+PassiveEndpointBase::
+~PassiveEndpointBase()
+{
+    for (int fd : sockets.fds())
+        poller.del(fd);
+}
+
+
+void
+PassiveEndpointBase::
+onPollEvent(struct epoll_event& ev)
+{
+    assert(ev.events == EPOLLIN);
+    assert(sockets.test(ev.data.fd));
+
+    while (true) {
+        Socket socket = Socket::accept(ev.data.fd, SOCK_NONBLOCK);
+        if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+
+        connect(std::move(socket));
+    }
+}
+
+
+
 } // slick

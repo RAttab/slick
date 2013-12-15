@@ -20,19 +20,14 @@ namespace slick {
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
-struct EndpointProvider : public EndpointBase
+struct EndpointProvider : public PassiveEndpointBase
 {
     EndpointProvider(Port port);
-    ~EndpointProvider();
+    virtual ~EndpointProvider() {}
 
     void publish(std::shared_ptr<Naming> name, const std::string& endpoint);
 
-protected:
-
-    virtual void onPollEvent(struct epoll_event& ev);
-
 private:
-    PassiveSockets sockets;
     std::shared_ptr<Naming> name;
 };
 
