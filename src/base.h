@@ -46,6 +46,7 @@ struct EndpointBase
 
     int fd() const { return poller.fd(); }
     void poll();
+    void shutdown();
 
     void send(ConnectionHandle client, Payload&& data);
     void send(ConnectionHandle client, const Payload& data)
@@ -83,6 +84,8 @@ private:
     struct Operation;
     void runOperations();
     void deferOperation(Operation&& op);
+
+    bool isOffThread() const;
 
 
     size_t pollThread;
@@ -163,7 +166,7 @@ private:
         int disconnectFd;
     };
 
-    Queue<Operation, 1U << 8> operations;
+    Queue<Operation, 1U << 6> operations;
     Notify operationsFd;
 };
 

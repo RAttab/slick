@@ -36,6 +36,21 @@ EndpointBase::
         disconnect(fd);
 }
 
+void
+EndpointBase::
+shutdown()
+{
+    pollThread = 0;
+    runOperations();
+}
+
+bool
+EndpointBase::
+isOffThread() const
+{
+    return pollThread && pollThread != threadId();
+}
+
 
 void
 EndpointBase::
@@ -79,7 +94,7 @@ void
 EndpointBase::
 connect(Socket&& socket)
 {
-    if (threadId() != pollThread) {
+    if (isOffThread()) {
         deferOperation(Operation(std::move(socket)));
         return;
     }
@@ -100,7 +115,7 @@ void
 EndpointBase::
 disconnect(int fd)
 {
-    if (threadId() != pollThread) {
+    if (isOffThread()) {
         deferOperation(Operation(fd));
         return;
     }
@@ -217,7 +232,7 @@ void
 EndpointBase::
 send(int fd, Payload&& data)
 {
-    if (threadId() != pollThread) {
+    if (isOffThread()) {
         deferOperation(Operation(fd, std::move(data)));
         return;
     }
@@ -239,7 +254,7 @@ void
 EndpointBase::
 broadcast(Payload&& data)
 {
-    if (threadId() != pollThread) {
+    if (isOffThread()) {
         deferOperation(Operation(std::move(data)));
         return;
     }
@@ -278,7 +293,7 @@ void
 EndpointBase::
 deferOperation(Operation&& op)
 {
-    assert(threadId() != pollThread);
+    assert(isOffThread());
 
     while (!operations.push(std::move(op))) {
 
@@ -298,7 +313,7 @@ void
 EndpointBase::
 runOperations()
 {
-    assert(threadId() == pollThread);
+    assert(!isOffThread());
 
     while (operationsFd.poll()) {
         while (!operations.empty()) {
