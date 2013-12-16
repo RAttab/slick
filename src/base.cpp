@@ -299,6 +299,7 @@ deferOperation(Operation&& op)
 
         // non-payload ops are unlikely to be in a time-sensitive part of the
         // code so retrying is acceptable.
+        // \todo Need something slightly better then spin-waiting.
         if (!op.isPayload()) continue;
 
         if (onDroppedPayload)

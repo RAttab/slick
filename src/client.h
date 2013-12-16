@@ -24,6 +24,7 @@ struct EndpointClient : public EndpointBase
     void connect(std::shared_ptr<Naming> name, const std::string& endpoint);
 
     ConnectionHandle connect(const std::string& host, Port port);
+    ConnectionHandle connect(const std::string& uri);
     void disconnect(ConnectionHandle h);
 
 private:

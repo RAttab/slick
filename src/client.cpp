@@ -33,6 +33,19 @@ connect(const std::string& host, Port port)
     return fd;
 }
 
+ConnectionHandle
+EndpointClient::
+connect(const std::string& uri)
+{
+    size_t pos = uri.find(':');
+    assert(pos != std::string::npos);
+
+    std::string host = uri.substr(0, pos);
+    Port port = stoi(uri.substr(pos + 1));
+
+    return connect(host, port);
+}
+
 void
 EndpointClient::
 disconnect(ConnectionHandle h)
