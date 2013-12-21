@@ -22,13 +22,19 @@ using namespace slick;
 /* MISC                                                                       */
 /******************************************************************************/
 
-enum { PayloadSize = 32 };
+enum {
+    PayloadSize = 32,
+    RefreshRate = 200,
+};
 
 string getStats(size_t value, size_t& oldValue)
 {
-    string diff = fmtValue(value - oldValue);
+    size_t diff = value - oldValue;
+    diff *= 1000 / RefreshRate;
+
     oldValue = value;
-    return diff;
+
+    return fmtValue(diff);
 }
 
 
@@ -59,12 +65,16 @@ void runProvider(Port port)
 
     thread pollTh([&] { while (true) provider.poll(); });
 
+    double start = wall();
     size_t oldRecv = 0;
+
     while (true) {
-        slick::sleep(1000);
+        slick::sleep(RefreshRate);
 
         string diffRecv = getStats(recv, oldRecv);
-        fprintf(stderr, "\rrecv: %s", diffRecv.c_str());
+        string elapsed = fmtElapsed(wall() - start);
+
+        fprintf(stderr, "\r%s> recv: %s ", elapsed.c_str(), diffRecv.c_str());
     }
 }
 
@@ -100,20 +110,25 @@ void runClient(vector<string> uris)
     Payload payload = proto::fromString(string(PayloadSize, 'a'));
     auto sendFn = [&] {
         while (true) {
-            client.broadcast(payload); sent++;
+            client.broadcast(payload);
+            sent++;
         }
     };
     thread sendTh(sendFn);
 
+
+    double start = wall();
     size_t oldSent = 0, oldRecv = 0;
+
     while (true) {
-        slick::sleep(1000);
+        slick::sleep(200);
 
         string diffSent = getStats(sent - dropped, oldSent);
         string diffRecv = getStats(recv, oldRecv);
+        string elapsed = fmtElapsed(wall() - start);
 
-        fprintf(stderr, "\rsent: %s, recv: %s, ",
-                diffSent.c_str(), diffRecv.c_str());
+        fprintf(stderr, "\r%s> sent: %s, recv: %s ",
+                elapsed.c_str(), diffSent.c_str(), diffRecv.c_str());
     }
 }
 
