@@ -152,11 +152,9 @@ Socket::
 {
     if (fd_ < 0) return;
 
-    int ret = shutdown(fd_, SHUT_RDWR);
-    SLICK_CHECK_ERRNO(!ret, "Socket.shutdown");
-
-    ret = close(fd_);
-    SLICK_CHECK_ERRNO(!ret, "Socket.close");
+    // There's no error checking because there's not much we can do if they fail
+    shutdown(fd_, SHUT_RDWR);
+    close(fd_);
 }
 
 int 
