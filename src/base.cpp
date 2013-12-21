@@ -51,12 +51,18 @@ isOffThread() const
     return pollThread && pollThread != threadId();
 }
 
+template<typename Payload>
 void
 EndpointBase::
-dropPayload(ConnectionHandle conn, Payload&& payload) const
+dropPayload(ConnectionHandle conn, Payload&& data) const
 {
     if (!onDroppedPayload) return;
-    onDroppedPayload(conn, std::move(payload));
+
+    // This extra step ensures that any lvalue references are first copied
+    // before being moved for the callback.
+    Payload tmpData = std::forward<Payload>(data);
+
+    onDroppedPayload(conn, std::move(tmpData));
 }
 
 
@@ -86,6 +92,10 @@ poll()
             if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
                 disconnect(ev.data.fd);
                 continue;
+            }
+
+            if (ev.events & EPOLLIN) {
+                if (!recvPayload(ev.data.fd)) continue;
             }
 
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
@@ -204,17 +214,26 @@ recvPayload(int fd)
 }
 
 
-namespace {
+template<typename Payload>
+void
+EndpointBase::
+pushToSendQueue(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
+{
+    enum { MaxQueueSize = 1 << 8 };
 
-// This is not part of the class EndpointBase because we don't want to make
-// it part of the header.
+    if (conn.sendQueue.size() < MaxQueueSize)
+        conn.sendQueue.emplace_back(std::forward<Payload>(data), offset);
+
+    else dropPayload(conn.socket.fd(), std::forward<Payload>(data));
+}
 
 template<typename Payload>
 bool
-sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset = 0)
+EndpointBase::
+sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
 {
     if (!conn.writable) {
-        conn.sendQueue.emplace_back(std::forward<Payload>(data), 0);
+        pushToSendQueue(conn, std::forward<Payload>(data), 0);
         return true;
     }
 
@@ -224,7 +243,7 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset = 0)
 
     while (true) {
 
-        ssize_t sent = send(conn.socket.fd(), start, size, MSG_NOSIGNAL);
+        ssize_t sent = ::send(conn.socket.fd(), start, size, MSG_NOSIGNAL);
         assert(sent); // No idea what to do with a return value of 0.
 
         if (sent > 0) conn.bytesSent += sent;
@@ -241,9 +260,7 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset = 0)
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn.writable = false;
-
-            conn.sendQueue.emplace_back(std::forward<Payload>(data), size);
-            assert((conn.sendQueue.size() < 1U) << 16);
+            pushToSendQueue(conn, std::forward<Payload>(data), size);
             return true;
         }
 
@@ -251,8 +268,6 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset = 0)
         SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
     }
 }
-
-} // namespace anonymous
 
 
 void

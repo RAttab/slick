@@ -76,16 +76,26 @@ protected:
 
 private:
 
+    struct Operation;
+    struct ConnectionState;
+
     bool recvPayload(int fd);
     uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
 
+    template<typename Payload>
+    void pushToSendQueue(ConnectionState& conn, Payload&& data, size_t offset);
+
+    template<typename Payload>
+    bool sendTo(ConnectionState& conn, Payload&& data, size_t offset = 0);
+
+    template<typename Payload>
+    void dropPayload(ConnectionHandle h, Payload&& payload) const;
+
     void flushQueue(int fd);
 
-    struct Operation;
     void runOperations();
     void deferOperation(Operation&& op);
 
-    void dropPayload(ConnectionHandle h, Payload&& payload) const;
     bool isOffThread() const;
 
 
