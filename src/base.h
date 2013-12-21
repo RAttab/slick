@@ -85,6 +85,7 @@ private:
     void runOperations();
     void deferOperation(Operation&& op);
 
+    void dropPayload(ConnectionHandle h, Payload&& payload) const;
     bool isOffThread() const;
 
 
@@ -101,7 +102,7 @@ private:
         size_t bytesRecv;
 
         bool writable;
-        std::vector<Payload> sendQueue;
+        std::vector<std::pair<Payload, size_t> > sendQueue;
     };
 
     std::unordered_map<ConnectionHandle, ConnectionState> connections;

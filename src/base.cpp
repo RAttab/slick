@@ -51,6 +51,14 @@ isOffThread() const
     return pollThread && pollThread != threadId();
 }
 
+void
+EndpointBase::
+dropPayload(ConnectionHandle conn, Payload&& payload) const
+{
+    if (!onDroppedPayload) return;
+    onDroppedPayload(conn, std::move(payload));
+}
+
 
 void
 EndpointBase::
@@ -125,7 +133,7 @@ disconnect(int fd)
 
     if (onDroppedPayload) {
         for (auto& pl : it->second.sendQueue)
-            onDroppedPayload(fd, std::move(pl));
+            dropPayload(fd, std::move(pl.first));
     }
 
     poller.del(fd);
@@ -198,31 +206,46 @@ namespace {
 // it part of the header.
 
 template<typename Payload>
-bool sendTo(EndpointBase::ConnectionState& conn, Payload&& data)
+bool
+sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset = 0)
 {
     if (!conn.writable) {
-        conn.sendQueue.emplace_back(std::forward<Payload>(data));
+        conn.sendQueue.emplace_back(std::forward<Payload>(data), 0);
         return true;
     }
 
-    ssize_t sent = send(
-            conn.socket.fd(), data.packet(), data.packetSize(), MSG_NOSIGNAL);
-    if (sent >= 0) {
-        assert(size_t(sent) == data.packetSize());
-        return true;
+    const uint8_t* start = data.packet() + offset;
+    ssize_t size = data.packetSize() - offset;
+    assert(size > 0);
+
+    while (true) {
+
+        ssize_t sent = send(conn.socket.fd(), start, size, MSG_NOSIGNAL);
+        assert(sent); // No idea what to do with a return value of 0.
+
+        if (sent > 0) conn.bytesSent += sent;
+
+        if (sent == size) return true;
+        if (sent >= 0 && sent < size) {
+            start += sent;
+            size -= sent;
+            assert(size > 0);
+            continue;
+        }
+
+        // sent < 0
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            conn.writable = false;
+
+            conn.sendQueue.emplace_back(std::forward<Payload>(data), size);
+            assert((conn.sendQueue.size() < 1U) << 16);
+            return true;
+        }
+
+        else if (errno == ECONNRESET || errno == EPIPE) return false;
+        SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
     }
-
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        conn.sendQueue.emplace_back(std::forward<Payload>(data));
-        assert((conn.sendQueue.size() < 1U) << 8);
-        return true;
-    }
-
-    else if (errno == ECONNRESET || errno == EPIPE) return false;
-    SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
-
-    conn.bytesSent += sent;
-    return true;
 }
 
 } // namespace anonymous
@@ -240,13 +263,14 @@ send(int fd, Payload&& data)
     auto it = connections.find(fd);
 
     if (it == connections.end()) {
-        if (onDroppedPayload)
-            onDroppedPayload(fd, std::move(data));
+        dropPayload(fd, std::move(data));
         return;
     }
 
-    if (!sendTo(it->second, std::move(data)))
+    if (!sendTo(it->second, std::move(data))) {
+        dropPayload(fd, std::move(data));
         disconnect(it->first);
+    }
 }
 
 
@@ -280,13 +304,20 @@ flushQueue(int fd)
     ConnectionState& connection = it->second;
     connection.writable = true;
 
-    std::vector<Payload> queue = std::move(connection.sendQueue);
-    for (auto& data : queue) {
-        if (sendTo(connection, std::move(data))) continue;
+    auto queue = std::move(connection.sendQueue);
 
-        disconnect(fd);
-        break;
+    size_t i = 0;
+    for (i = 0; i < queue.size(); ++i) {
+        if (!sendTo(connection, std::move(queue[i].first), queue[i].second))
+            break;
     }
+
+    if (i == queue.size()) return;
+
+    for (; i < queue.size(); ++i)
+        dropPayload(fd, std::move(queue[i].first));
+
+    disconnect(fd);
 }
 
 void
@@ -302,8 +333,7 @@ deferOperation(Operation&& op)
         // \todo Need something slightly better then spin-waiting.
         if (!op.isPayload()) continue;
 
-        if (onDroppedPayload)
-            onDroppedPayload(op.conn, std::move(op.data));
+        dropPayload(op.conn, std::move(op.data));
     }
 
     operationsFd.signal();
@@ -316,22 +346,29 @@ runOperations()
 {
     assert(!isOffThread());
 
-    while (operationsFd.poll()) {
-        while (!operations.empty()) {
-            Operation op = operations.pop();
+    while (operationsFd.poll());
 
-            switch(op.type) {
+    // The caps is required to keep the poll thread responsive when bombarded
+    // with events.
+    enum { OpsCap = 1 << 6 };
 
-            case Operation::Unicast: send(op.conn, std::move(op.data)); break;
-            case Operation::Broadcast: broadcast(std::move(op.data)); break;
+    for (size_t i = 0; !operations.empty() && i < OpsCap; ++i) {
+        Operation op = operations.pop();
 
-            case Operation::Connect: connect(std::move(op.connectSocket)); break;
-            case Operation::Disconnect: disconnect(op.disconnectFd); break;
+        switch(op.type) {
 
-            default: assert(false);
-            }
+        case Operation::Unicast: send(op.conn, std::move(op.data)); break;
+        case Operation::Broadcast: broadcast(std::move(op.data)); break;
+
+        case Operation::Connect: connect(std::move(op.connectSocket)); break;
+        case Operation::Disconnect: disconnect(op.disconnectFd); break;
+
+        default: assert(false);
         }
+
     }
+
+    if (!operations.empty()) operationsFd.signal();
 }
 
 
