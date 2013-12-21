@@ -334,6 +334,7 @@ deferOperation(Operation&& op)
         if (!op.isPayload()) continue;
 
         dropPayload(op.conn, std::move(op.data));
+        return;
     }
 
     operationsFd.signal();
