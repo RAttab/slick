@@ -62,7 +62,7 @@ std::string format(const char* pattern, const Args&... args)
 /* FORMAT UTILS                                                               */
 /******************************************************************************/
 
-std::string fmtElapsed(double elapsed)
+std::string fmtElapsedSmall(double elapsed)
 {
     static const std::string scaleIndicators = "smunpf?";
 
@@ -73,6 +73,39 @@ std::string fmtElapsed(double elapsed)
     }
 
     return format("%6.2f%c", elapsed, scaleIndicators[i]);
+}
+
+std::string fmtElapsedLarge(double elapsed)
+{
+    char indicator = 's';
+
+    if (elapsed >= 60.0) {
+        elapsed /= 60.0;
+        indicator = 'M';
+    }
+    else goto done;
+
+    if (elapsed >= 60.0) {
+        elapsed /= 60.0;
+        indicator = 'H';
+    }
+    else goto done;
+
+    if (elapsed >= 24.0) {
+        elapsed /= 24.0;
+        indicator = 'D';
+    }
+    else goto done;
+
+  done:
+    return format("%6.2f%c", elapsed, indicator);
+}
+
+std::string fmtElapsed(double elapsed)
+{
+    if (elapsed < 60.0)
+        return fmtElapsedSmall(elapsed);
+    return fmtElapsedLarge(elapsed);
 }
 
 
