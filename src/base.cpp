@@ -79,19 +79,15 @@ poll()
         if (connections.count(ev.data.fd)) {
 
             if (ev.events & EPOLLERR) {
-                int err = connections[ev.data.fd].socket.error();
+                auto& conn = connections[ev.data.fd];
 
+                int err = conn.socket.error();
                 if (err & EPOLLRDHUP || err & EPOLLHUP) {
                     disconnect(ev.data.fd);
                     continue;
                 }
 
-                connections[ev.data.fd].socket.throwError();
-            }
-
-            if (ev.events & EPOLLRDHUP || ev.events & EPOLLHUP) {
-                disconnect(ev.data.fd);
-                continue;
+                conn.socket.throwError();
             }
 
             if (ev.events & EPOLLIN) {
