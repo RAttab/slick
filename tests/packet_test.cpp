@@ -142,7 +142,7 @@ int main(int argc, char** argv)
     assert(argc >= 2);
 
     if (argv[1][0] == 'p') {
-        Port port = 20000;
+        Port port = 30000;
         if (argc >= 3) port = atoi(argv[2]);
         runProvider(port);
     }
