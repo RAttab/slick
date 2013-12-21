@@ -260,7 +260,8 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn.writable = false;
-            pushToSendQueue(conn, std::forward<Payload>(data), size);
+            size_t pos = data.packetSize() - size;
+            pushToSendQueue(conn, std::forward<Payload>(data), pos);
             return true;
         }
 
