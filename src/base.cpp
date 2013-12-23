@@ -90,10 +90,7 @@ poll()
                 conn.socket.throwError();
             }
 
-            if (ev.events & EPOLLIN) {
-                if (!recvPayload(ev.data.fd)) continue;
-            }
-
+            if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
@@ -155,7 +152,7 @@ disconnect(int fd)
 
 uint8_t*
 EndpointBase::
-processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
+processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
 {
     uint8_t* it = first;
 
@@ -169,23 +166,28 @@ processRecvBuffer(int fd, uint8_t* first, uint8_t* last)
         }
 
         it += data.packetSize();
-        onPayload(fd, std::move(data));
+        conn.recvQueue.emplace_back(std::move(data));
     }
 
     assert(it == last);
     return first;
 }
 
-bool
+void
 EndpointBase::
 recvPayload(int fd)
 {
-    auto conn = connections.find(fd);
-    assert(conn != connections.end());
+    auto connIt = connections.find(fd);
+    assert(connIt != connections.end());
+
+    auto& conn = connIt->second;
+    conn.recvQueue.reserve(1 << 5);
 
     enum { bufferLength = 1U << 16 };
     uint8_t buffer[bufferLength];
     uint8_t* bufferIt = buffer;
+
+    bool doDisconnect = false;
 
     while (true) {
         ssize_t read = recv(fd, bufferIt, (buffer + bufferLength) - bufferIt, 0);
@@ -197,16 +199,21 @@ recvPayload(int fd)
         }
 
         if (!read) { // indicates that shutdown was called on the connection side.
-            disconnect(fd);
-            return false;
+            doDisconnect = true;
+            break;
         }
 
-        conn->second.bytesRecv += read;
-        bufferIt = processRecvBuffer(fd, buffer, bufferIt + read);
+        conn.bytesRecv += read;
+        bufferIt = processRecvBuffer(conn, buffer, bufferIt + read);
         assert(bufferIt < (buffer + bufferLength));
     }
 
-    return true;
+    for (auto& data : conn.recvQueue)
+        onPayload(fd, std::move(data));
+    conn.recvQueue.clear();;
+
+    if (doDisconnect && connections.count(fd))
+        disconnect(fd);
 }
 
 
@@ -220,7 +227,10 @@ pushToSendQueue(EndpointBase::ConnectionState& conn, Payload&& data, size_t offs
     if (conn.sendQueue.size() < MaxQueueSize)
         conn.sendQueue.emplace_back(std::forward<Payload>(data), offset);
 
-    else dropPayload(conn.socket.fd(), std::forward<Payload>(data));
+    else {
+        dropPayload(conn.socket.fd(), std::forward<Payload>(data));
+        stats.sendQueueFull++;
+    }
 }
 
 template<typename Payload>
@@ -256,6 +266,8 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn.writable = false;
+            stats.writableOff++;
+
             size_t pos = data.packetSize() - size;
             pushToSendQueue(conn, std::forward<Payload>(data), pos);
             return true;
@@ -280,6 +292,7 @@ send(int fd, Payload&& data)
 
     if (it == connections.end()) {
         dropPayload(fd, std::move(data));
+        stats.sendToUnknown++;
         return;
     }
 
@@ -315,16 +328,17 @@ EndpointBase::
 flushQueue(int fd)
 {
     auto it = connections.find(fd);
-    assert(it != connections.end());
+    if (it == connections.end()) return;
 
-    ConnectionState& connection = it->second;
-    connection.writable = true;
+    auto& conn = it->second;
+    conn.writable = true;
+    stats.writableOn++;
 
-    auto queue = std::move(connection.sendQueue);
+    auto queue = std::move(conn.sendQueue);
 
     size_t i = 0;
     for (i = 0; i < queue.size(); ++i) {
-        if (!sendTo(connection, std::move(queue[i].first), queue[i].second))
+        if (!sendTo(conn, std::move(queue[i].first), queue[i].second))
             break;
     }
 
@@ -350,6 +364,7 @@ deferOperation(Operation&& op)
         if (!op.isPayload()) continue;
 
         dropPayload(op.conn, std::move(op.data));
+        stats.deferPayload++;
         return;
     }
 

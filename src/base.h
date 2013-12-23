@@ -62,6 +62,23 @@ struct EndpointBase
 
     // \todo Would be nice to have multicast support.
 
+
+    struct Stats
+    {
+        Stats() :
+            sendQueueFull(0), sendToUnknown(0), deferPayload(0),
+            writableOn(0), writableOff(0)
+        {}
+
+        size_t sendQueueFull;
+        size_t sendToUnknown;
+        size_t deferPayload;
+
+        size_t writableOn;
+        size_t writableOff;
+    } stats;
+
+
 protected:
 
     void connect(Socket&& socket);
@@ -79,8 +96,8 @@ private:
     struct Operation;
     struct ConnectionState;
 
-    bool recvPayload(int fd);
-    uint8_t* processRecvBuffer(int fd, uint8_t* first, uint8_t* last);
+    void recvPayload(int fd);
+    uint8_t* processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last);
 
     template<typename Payload>
     void pushToSendQueue(ConnectionState& conn, Payload&& data, size_t offset);
@@ -113,6 +130,7 @@ private:
 
         bool writable;
         std::vector<std::pair<Payload, size_t> > sendQueue;
+        std::vector<Payload> recvQueue;
     };
 
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
