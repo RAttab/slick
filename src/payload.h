@@ -74,7 +74,7 @@ struct Payload
         other.bytes_ = nullptr;
     }
 
-    Payload& operator= (Payload&& other)
+    Payload& operator= (Payload&& other) noexcept
     {
         clear();
         std::swap(bytes_, other.bytes_);
