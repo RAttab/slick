@@ -45,7 +45,7 @@ struct EndpointBase
 
 
     int fd() const { return poller.fd(); }
-    void poll();
+    void poll(int timeoutMs = 0);
     void shutdown();
 
     void send(ConnectionHandle client, Payload&& data);

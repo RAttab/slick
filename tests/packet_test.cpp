@@ -63,7 +63,7 @@ void runProvider(Port port)
         dropped++;
     };
 
-    thread pollTh([&] { while (true) provider.poll(); });
+    thread pollTh([&] { while (true) provider.poll(100); });
 
     double start = wall();
     size_t oldRecv = 0;
@@ -105,7 +105,7 @@ void runClient(vector<string> uris)
 
     for (auto& uri : uris) client.connect(uri);
 
-    thread pollTh([&] { while (true) client.poll(); });
+    thread pollTh([&] { while (true) client.poll(100); });
 
     Payload payload = proto::fromString(string(PayloadSize, 'a'));
     auto sendFn = [&] {

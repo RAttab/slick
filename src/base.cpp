@@ -68,11 +68,11 @@ dropPayload(ConnectionHandle conn, Payload&& data) const
 
 void
 EndpointBase::
-poll()
+poll(int timeoutMs)
 {
     pollThread = threadId(); // \todo This is a bit flimsy.
 
-    while(poller.poll()) {
+    while(poller.poll(timeoutMs)) {
 
         struct epoll_event ev = poller.next();
 
