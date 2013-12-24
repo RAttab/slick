@@ -23,8 +23,7 @@ struct EndpointClient : public EndpointBase
 
     void connect(std::shared_ptr<Naming> name, const std::string& endpoint);
 
-    ConnectionHandle connect(const std::string& host, Port port);
-    ConnectionHandle connect(const std::string& uri);
+    ConnectionHandle connect(const Address& addr);
     void disconnect(ConnectionHandle h);
 
 private:
@@ -38,22 +37,20 @@ private:
 
 struct Connection
 {
-    Connection(EndpointClient& client, const std::string& host, Port port) :
-        client(client), host_(host), port_(port)
+    Connection(EndpointClient& client, const Address& addr) :
+        client(client), addr_(addr)
     {
-        conn = client.connect(host, port);
+        conn = client.connect(addr_);
     }
 
     ~Connection() { client.disconnect(conn); }
 
-    const std::string& host() const { return host_; }
-    Port port() const { return port_; }
+    const Address& addr() { return addr_; }
 
 private:
     EndpointClient& client;
     ConnectionHandle conn;
-    std::string host_;
-    Port port_;
+    Address addr_;
 };
 
 } // slick

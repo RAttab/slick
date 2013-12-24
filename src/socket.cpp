@@ -21,6 +21,21 @@ namespace slick {
 
 
 /******************************************************************************/
+/* ADDRESS                                                                    */
+/******************************************************************************/
+
+Address::
+Address(const std::string& hostPort)
+{
+    size_t pos = hostPort.find(':');
+    assert(pos != std::string::npos);
+
+    host = hostPort.substr(0, pos);
+    port = stoi(hostPort.substr(pos + 1));
+}
+
+
+/******************************************************************************/
 /* INTERFACE IT                                                               */
 /******************************************************************************/
 
@@ -97,12 +112,12 @@ operator=(Socket&& other) noexcept
 
 
 Socket::
-Socket(const std::string& host, Port port, int flags) :
+Socket(const Address& address, int flags) :
     fd_(-1)
 {
-    assert(!host.empty());
+    assert(address);
 
-    for (InterfaceIt it(host.c_str(), port); it; it++) {
+    for (InterfaceIt it(address.chost(), address.port); it; it++) {
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 

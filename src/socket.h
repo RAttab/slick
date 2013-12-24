@@ -56,13 +56,34 @@ struct PortRange
 
 
 /******************************************************************************/
+/* ADDRESS                                                                    */
+/******************************************************************************/
+
+struct Address
+{
+    Address() : port(0) {}
+    Address(const std::string& hostPort);
+    Address(std::string host, Port port) :
+        host(std::move(host)), port(port)
+    {}
+
+    operator bool() const { return host.size() && port; }
+
+    const char* chost() const { return host.c_str(); }
+
+    std::string host;
+    Port port;
+};
+
+
+/******************************************************************************/
 /* SOCKET                                                                     */
 /******************************************************************************/
 
 struct Socket
 {
     Socket() : fd_(-1) {}
-    Socket(const std::string& host, Port port, int flags = 0);
+    Socket(const Address& addr, int flags = 0);
     ~Socket();
 
     Socket(const Socket&) = delete;

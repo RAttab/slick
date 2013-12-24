@@ -25,25 +25,12 @@ connect(std::shared_ptr<Naming> name, const std::string& endpoint)
 
 ConnectionHandle
 EndpointClient::
-connect(const std::string& host, Port port)
+connect(const Address& addr)
 {
-    Socket socket(host.c_str(), port, SOCK_NONBLOCK);
+    Socket socket(addr, SOCK_NONBLOCK);
     int fd = socket.fd();
     EndpointBase::connect(std::move(socket));
     return fd;
-}
-
-ConnectionHandle
-EndpointClient::
-connect(const std::string& uri)
-{
-    size_t pos = uri.find(':');
-    assert(pos != std::string::npos);
-
-    std::string host = uri.substr(0, pos);
-    Port port = stoi(uri.substr(pos + 1));
-
-    return connect(host, port);
 }
 
 void

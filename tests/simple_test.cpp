@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(basics)
         pongRecv++;
     };
 
-    Connection conn(client, "localhost", listenPort);
+    Connection conn(client, { "localhost", listenPort });
 
     std::atomic<bool> shutdown(false);
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
@@ -152,8 +152,8 @@ BOOST_AUTO_TEST_CASE(n_to_n)
     std::thread clientPollTh(clientPollFn);
 
     for (size_t id = 0; id < N; ++id) {
-        connections[id] =
-            make_shared<Connection>(client, "localhost", listenPortStart + id);
+        connections[id] = make_shared<Connection>(
+                client, Address("localhost", listenPortStart + id));
     }
 
 
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
     slick::sleep(1);
 
-    auto conn = make_shared<Connection>(client, "localhost", listenPort);
+    auto conn = make_shared<Connection>(client, Address("localhost", listenPort));
     while (!gotClient);
 
     conn.reset();
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
         auto pollFn = [&] { while (!shutdown) poller.poll(); };
         std::thread pollTh(pollFn);
 
-        Connection conn(client, "localhost", listenPort);
+        Connection conn(client, { "localhost", listenPort });
 
         while(true);
     }
