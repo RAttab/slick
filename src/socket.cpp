@@ -73,7 +73,7 @@ private:
 
 
 Socket::
-Socket(Socket&& other) :
+Socket(Socket&& other) noexcept :
     fd_(other.fd_),
     addr(std::move(other.addr)),
     addrlen(std::move(other.addrlen))
@@ -84,7 +84,7 @@ Socket(Socket&& other) :
 
 Socket&
 Socket::
-operator=(Socket&& other)
+operator=(Socket&& other) noexcept
 {
     fd_ = other.fd_;
     other.fd_ = -1;

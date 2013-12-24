@@ -69,7 +69,7 @@ struct Payload
         return *this;
     }
 
-    Payload(Payload&& other) : bytes_(other.bytes_)
+    Payload(Payload&& other) noexcept : bytes_(other.bytes_)
     {
         other.bytes_ = nullptr;
     }

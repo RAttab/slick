@@ -198,7 +198,7 @@ recvPayload(int fd)
             SLICK_CHECK_ERRNO(read != -1, "EndpointBase.recv");
         }
 
-        if (!read) { // indicates that shutdown was called on the connection side.
+        if (!read) { // indicates that shutdown was called on the client side.
             doDisconnect = true;
             break;
         }

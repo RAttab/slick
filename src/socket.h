@@ -68,8 +68,8 @@ struct Socket
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
 
-    Socket(Socket&& other);
-    Socket& operator=(Socket&& other);
+    Socket(Socket&& other) noexcept;
+    Socket& operator=(Socket&& other) noexcept;
 
     int fd() const { return fd_; }
     int error() const;

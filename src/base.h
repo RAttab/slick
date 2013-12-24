@@ -123,6 +123,12 @@ private:
     {
         ConnectionState() : bytesSent(0), bytesRecv(0), writable(false) {}
 
+        ConnectionState(ConnectionState&&) = default;
+        ConnectionState& operator=(ConnectionState&&) = default;
+
+        ConnectionState(const ConnectionState&) = delete;
+        ConnectionState& operator=(const ConnectionState&) = delete;
+
         Socket socket;
 
         size_t bytesSent;
@@ -159,7 +165,7 @@ private:
             type(Disconnect), disconnectFd(disconnectFd)
         {}
 
-        Operation(Operation&& other) :
+        Operation(Operation&& other) noexcept :
             type(other.type),
             conn(other.conn),
             data(std::move(other.data)),
@@ -167,7 +173,7 @@ private:
             disconnectFd(other.disconnectFd)
         {}
 
-        Operation& operator=(Operation&& other)
+        Operation& operator=(Operation&& other) noexcept
         {
             type = other.type,
 
