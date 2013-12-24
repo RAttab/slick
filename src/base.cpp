@@ -363,7 +363,7 @@ deferOperation(Operation&& op)
         // \todo Need something slightly better then spin-waiting.
         if (!op.isPayload()) continue;
 
-        dropPayload(op.conn, std::move(op.data));
+        dropPayload(op.send.fd, std::move(op.send.data));
         stats.deferPayload++;
         return;
     }
@@ -389,11 +389,11 @@ runOperations()
 
         switch(op.type) {
 
-        case Operation::Unicast: send(op.conn, std::move(op.data)); break;
-        case Operation::Broadcast: broadcast(std::move(op.data)); break;
+        case Operation::Unicast: send(op.send.fd, std::move(op.send.data)); break;
+        case Operation::Broadcast: broadcast(std::move(op.send.data)); break;
 
-        case Operation::Connect: connect(std::move(op.connectSocket)); break;
-        case Operation::Disconnect: disconnect(op.disconnectFd); break;
+        case Operation::Connect: connect(std::move(op.connect.socket)); break;
+        case Operation::Disconnect: disconnect(op.disconnect.fd); break;
 
         default: assert(false);
         }

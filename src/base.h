@@ -144,44 +144,44 @@ private:
 
     struct Operation
     {
-        enum Type { Unicast, Broadcast, Connect, Disconnect };
+        enum Type { None, Unicast, Broadcast, Connect, Disconnect };
 
-        Operation() {}
+        Operation() : type(None) {}
+
+        Operation(int fd, Payload&& data) : type(Unicast)
+        {
+            send.fd = fd;
+            send.data = std::move(data);
+        }
 
         template<typename Payload>
-        Operation(Payload&& data) :
-            type(Broadcast), data(std::forward<Payload>(data))
-        {}
+        Operation(Payload&& data) : type(Broadcast)
+        {
+            send.data = std::forward<Payload>(data);
+        }
 
-        Operation(ConnectionHandle conn, Payload&& data) :
-            type(Unicast), conn(conn), data(std::move(data))
-        {}
+        Operation(Socket&& socket) : type(Connect)
+        {
+            connect.socket = std::move(socket);
+        }
 
-        Operation(Socket&& socket) :
-            type(Connect), connectSocket(std::move(socket))
-        {}
+        explicit Operation(int disconnectFd) : type(Disconnect)
+        {
+            disconnect.fd = disconnectFd;
+        }
 
-        explicit Operation(ConnectionHandle disconnectFd) :
-            type(Disconnect), disconnectFd(disconnectFd)
-        {}
-
-        Operation(Operation&& other) noexcept :
-            type(other.type),
-            conn(other.conn),
-            data(std::move(other.data)),
-            connectSocket(std::move(other.connectSocket)),
-            disconnectFd(other.disconnectFd)
-        {}
+        Operation(Operation&& other) noexcept
+        {
+            *this = std::move(other);
+        }
 
         Operation& operator=(Operation&& other) noexcept
         {
-            type = other.type,
-
-            conn = other.conn;
-            data = std::move(other.data);
-
-            connectSocket = std::move(other.connectSocket);
-            disconnectFd = other.disconnectFd;
+            type = other.type;
+            send.fd = other.send.fd;
+            send.data = std::move(other.send.data);
+            connect.socket = std::move(other.connect.socket);
+            disconnect.fd = other.disconnect.fd;
 
             return *this;
         }
@@ -191,14 +191,15 @@ private:
 
         bool isPayload() const { return type == Unicast || type == Broadcast; }
 
-
         Type type;
 
-        ConnectionHandle conn;
-        Payload data;
+        struct {
+            int fd;
+            Payload data;
+        } send;
 
-        Socket connectSocket;
-        int disconnectFd;
+        struct { Socket socket; } connect;
+        struct { int fd; } disconnect;
     };
 
     Queue<Operation, 1U << 6> operations;
