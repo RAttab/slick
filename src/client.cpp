@@ -27,7 +27,9 @@ ConnectionHandle
 EndpointClient::
 connect(const Address& addr)
 {
-    Socket socket(addr, SOCK_NONBLOCK);
+    Socket socket = Socket::connect(addr, SOCK_NONBLOCK);
+    if (!socket) return -1;
+
     int fd = socket.fd();
     EndpointBase::connect(std::move(socket));
     return fd;

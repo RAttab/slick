@@ -83,7 +83,6 @@ struct Address
 struct Socket
 {
     Socket() : fd_(-1) {}
-    Socket(const Address& addr, int flags = 0);
     ~Socket();
 
     Socket(const Socket&) = delete;
@@ -96,14 +95,15 @@ struct Socket
     int error() const;
     void throwError() const;
 
+    operator bool() const { return fd_ >= 0; }
+
+    static Socket connect(const Address& addr, int flags = 0);
     static Socket accept(int passiveFd, int flags = 0);
 
 private:
     void init();
 
     int fd_;
-    struct sockaddr addr;
-    socklen_t addrlen;
 };
 
 

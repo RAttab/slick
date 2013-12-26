@@ -88,10 +88,7 @@ private:
 
 
 Socket::
-Socket(Socket&& other) noexcept :
-    fd_(other.fd_),
-    addr(std::move(other.addr)),
-    addrlen(std::move(other.addrlen))
+Socket(Socket&& other) noexcept : fd_(other.fd_)
 {
     other.fd_ = -1;
 }
@@ -101,40 +98,37 @@ Socket&
 Socket::
 operator=(Socket&& other) noexcept
 {
+    if (this == &other) return *this;
+
     fd_ = other.fd_;
     other.fd_ = -1;
-
-    addr = std::move(other.addr);
-    addrlen = std::move(other.addrlen);
 
     return *this;
 }
 
 
+Socket
 Socket::
-Socket(const Address& address, int flags) :
-    fd_(-1)
+connect(const Address& addr, int flags)
 {
-    assert(address);
+    Socket socket;
+    assert(addr);
 
-    for (InterfaceIt it(address.chost(), address.port); it; it++) {
-        int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
+    for (InterfaceIt it(addr.chost(), addr.port); it; it++) {
+        int fd = ::socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
         FdGuard guard(fd);
 
-        int ret = connect(fd, it->ai_addr, it->ai_addrlen);
+        int ret = ::connect(fd, it->ai_addr, it->ai_addrlen);
         if (ret < 0 && errno != EINPROGRESS) continue;
 
-        fd_ = guard.release();
-
-        addrlen = it->ai_addrlen;
-        std::memcpy(&addr, &it->ai_addr, sizeof addr);
+        socket.fd_ = guard.release();
         break;
     }
 
-    if (fd_ < 0) throw std::runtime_error("ERROR: no valid interface");
-    init();
+    if (socket) socket.init();
+    return std::move(socket);
 }
 
 
@@ -144,7 +138,10 @@ accept(int fd, int flags)
 {
     Socket socket;
 
-    socket.fd_ = accept4(fd, &socket.addr, &socket.addrlen, flags);
+    struct sockaddr addr;
+    socklen_t addrlen;
+
+    socket.fd_ = accept4(fd, &addr, &addrlen, flags);
     if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return std::move(socket);
     SLICK_CHECK_ERRNO(socket.fd_ >= 0, "Socket.accept");
@@ -172,7 +169,7 @@ Socket::
     close(fd_);
 }
 
-int 
+int
 Socket::
 error() const
 {
@@ -185,7 +182,7 @@ error() const
     return error;
 }
 
-void 
+void
 Socket::
 throwError() const
 {

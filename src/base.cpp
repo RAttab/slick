@@ -435,7 +435,7 @@ onPollEvent(struct epoll_event& ev)
 
     while (true) {
         Socket socket = Socket::accept(ev.data.fd, SOCK_NONBLOCK);
-        if (socket.fd() < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+        if (!socket) break;
 
         connect(std::move(socket));
     }
