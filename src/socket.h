@@ -69,6 +69,14 @@ struct Address
 
     operator bool() const { return host.size() && port; }
 
+    bool operator< (const Address& other)
+    {
+        int res = host.compare(other.host);
+        if (res) return res < 0;
+
+        return port < other.port;
+    }
+
     const char* chost() const { return host.c_str(); }
 
     std::string host;
