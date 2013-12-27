@@ -8,6 +8,7 @@
 #pragma once
 
 #include "utils.h"
+#include "lockless/lock.h"
 
 #include <array>
 #include <atomic>
@@ -59,7 +60,7 @@ struct Queue
     template<typename Val>
     bool push(Val&& val)
     {
-        std::lock_guard<SpinLock> guard(lock);
+        std::lock_guard<Lock> guard(lock);
 
         uint64_t old = d.cursors;
         if (wpos(old) - rpos(old) == Size) return false;
@@ -83,7 +84,9 @@ private:
         std::atomic<uint64_t> cursors;
     } d;
 
-    SpinLock lock;
+    typedef lockless::UnfairLock Lock;
+
+    Lock lock;
     std::array<T, Size> queue;
 };
 

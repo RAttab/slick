@@ -8,6 +8,8 @@
 #include "client.h"
 #include "provider.h"
 #include "test_utils.h"
+#include "lockless/format.h"
+#include "lockless/tm.h"
 
 #include <vector>
 #include <string>
@@ -16,6 +18,7 @@
 
 using namespace std;
 using namespace slick;
+using namespace lockless;
 
 
 /******************************************************************************/
@@ -65,11 +68,11 @@ void runProvider(Port port)
 
     thread pollTh([&] { while (true) provider.poll(100); });
 
-    double start = wall();
+    double start = lockless::wall();
     size_t oldRecv = 0;
 
     while (true) {
-        slick::sleep(RefreshRate);
+        lockless::sleep(RefreshRate);
 
         string diffRecv = getStats(recv, oldRecv);
         string elapsed = fmtElapsed(wall() - start);
@@ -123,7 +126,7 @@ void runClient(vector<string> uris)
     size_t oldWriteOn = 0, oldWriteOff = 0;
 
     while (true) {
-        slick::sleep(200);
+        lockless::sleep(200);
 
         string diffSent = getStats(sent - dropped, oldSent);
         string diffRecv = getStats(recv, oldRecv);

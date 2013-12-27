@@ -12,18 +12,21 @@
 #include "client.h"
 #include "utils.h"
 #include "test_utils.h"
+#include "lockless/format.h"
+#include "lockless/tm.h"
 
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
 using namespace slick;
+using namespace lockless;
 
 namespace { Port portCounter = 20000; }
 
 
 BOOST_AUTO_TEST_CASE(basics)
 {
-    printTitle("basics", '=');
+    cerr << fmtTitle("basics", '=') << endl;
 
     const Port listenPort = portCounter++;
 
@@ -79,7 +82,7 @@ BOOST_AUTO_TEST_CASE(basics)
         client.broadcast(proto::fromString(ss.str()));
     }
 
-    slick::sleep(100);
+    lockless::sleep(100);
     shutdown = true;
     pollTh.join();
 
@@ -89,13 +92,13 @@ BOOST_AUTO_TEST_CASE(basics)
 
 BOOST_AUTO_TEST_CASE(n_to_n)
 {
-    printTitle("n_to_n", '=');
+    cerr << fmtTitle("n_to_n", '=') << endl;
 
     enum { N = 100 };
 
 
     // PROVIDERS ---------------------------------------------------------------
-    printTitle("providers");
+    cerr << fmtTitle("providers") << endl;
 
     const Port listenPortStart = 30000;
 
@@ -129,7 +132,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
 
     // CLIENTS -----------------------------------------------------------------
-    printTitle("clients");
+    cerr << fmtTitle("clients") << endl;
 
     SourcePoller clientPoller;
 
@@ -158,14 +161,14 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
 
     // TEST --------------------------------------------------------------------
-    printTitle("test");
+    cerr << fmtTitle("test") << endl;
 
     client.broadcast(proto::fromInt<size_t>(1));
 
     size_t exp = (N * (N + 1)) / 2;
     while (provIdSum != exp);
 
-    printTitle("done");
+    cerr << fmtTitle("done") << endl;
 
     provShutdown = true;
     clientShutdown = true;
@@ -183,7 +186,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
 BOOST_AUTO_TEST_CASE(nice_disconnect)
 {
-    printTitle("nice_disconnecct", '=');
+    cerr << fmtTitle("nice_disconnecct", '=') << endl;
 
     const Port listenPort = portCounter++;
 
@@ -211,7 +214,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
     auto pollFn = [&] { while (!shutdown) poller.poll(); };
     std::thread pollTh(pollFn);
 
-    slick::sleep(1);
+    lockless::sleep(1);
 
     auto conn = make_shared<Connection>(client, Address("localhost", listenPort));
     while (!gotClient);
@@ -225,7 +228,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
 BOOST_AUTO_TEST_CASE(hard_disconnect)
 {
-    printTitle("hard_disconnecct", '=');
+    cerr << fmtTitle("hard_disconnecct", '=') << endl;
 
     const Port listenPort = portCounter++;
 

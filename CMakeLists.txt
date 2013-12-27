@@ -17,10 +17,6 @@ project(slick)
 enable_testing()
 
 add_definitions("-Wall -Wextra -Werror -pedantic -g -O4")
-include_directories("${PROJECT_SOURCE_DIR}/src")
-
-link_libraries(rt)
-link_libraries(pthread)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -47,13 +43,21 @@ endif()
 # ENV TEST
 #------------------------------------------------------------------------------#
 
+include_directories("includes")
+
 include_directories("$ENV{HOME}/local/include")
 link_directories("$ENV{HOME}/local/lib")
 
 
 #------------------------------------------------------------------------------#
-# TCMALLOC
+# LIBRARIES
 #------------------------------------------------------------------------------#
+
+add_subdirectory(lockless)
+link_libraries(lockless)
+
+link_libraries(rt)
+link_libraries(pthread)
 
 option(USE_TCMALLOC "Use tcmalloc for heap allocations." ON)
 find_library(LIB_TCMALLOC tcmalloc)
@@ -72,6 +76,8 @@ endif()
 #------------------------------------------------------------------------------#
 # BUILD
 #------------------------------------------------------------------------------#
+
+include_directories("${PROJECT_SOURCE_DIR}/src")
 
 install(
     FILES
@@ -92,7 +98,6 @@ install(
 add_library(
     slick
     SHARED
-    src/utils.cpp
     src/poll.cpp
     src/notify.cpp
     src/payload.cpp

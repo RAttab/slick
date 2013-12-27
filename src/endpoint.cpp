@@ -7,6 +7,7 @@
 
 #include "endpoint.h"
 #include "utils.h"
+#include "lockless/tls.h"
 
 #include <cassert>
 #include <sys/epoll.h>
@@ -48,7 +49,7 @@ bool
 Endpoint::
 isOffThread() const
 {
-    return pollThread && pollThread != threadId();
+    return pollThread && pollThread != lockless::threadId();
 }
 
 template<typename Payload>
@@ -70,7 +71,7 @@ void
 Endpoint::
 poll(int timeoutMs)
 {
-    pollThread = threadId(); // \todo This is a bit flimsy.
+    pollThread = lockless::threadId(); // \todo This is a bit flimsy.
 
     while(poller.poll(timeoutMs)) {
 
