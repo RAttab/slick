@@ -12,6 +12,7 @@
 #include "notify.h"
 #include "poll.h"
 #include "payload.h"
+#include "defer.h"
 
 #include <vector>
 #include <functional>
@@ -109,9 +110,7 @@ private:
     void dropPayload(ConnectionHandle h, Payload&& payload) const;
 
     void flushQueue(int fd);
-
-    void runOperations();
-    void deferOperation(Operation&& op);
+    void onOperation(Operation&& op);
 
     bool isOffThread() const;
 
@@ -155,12 +154,12 @@ private:
         }
 
         template<typename Payload>
-        Operation(Payload&& data) : type(Broadcast)
+        explicit Operation(Payload&& data) : type(Broadcast)
         {
             send.data = std::forward<Payload>(data);
         }
 
-        Operation(Socket&& socket) : type(Connect)
+        explicit Operation(Socket&& socket) : type(Connect)
         {
             connect.socket = std::move(socket);
         }
@@ -202,8 +201,7 @@ private:
         struct { int fd; } disconnect;
     };
 
-    Queue<Operation, 1U << 6> operations;
-    Notify operationsFd;
+    Defer<Operation> operations;
 };
 
 

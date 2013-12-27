@@ -21,7 +21,9 @@ namespace slick {
 Endpoint::
 Endpoint() : pollThread(0)
 {
-    poller.add(operationsFd.fd());
+    using namespace std::placeholders;
+    operations.onOperation = std::bind(&Endpoint::onOperation, this, _1);
+    poller.add(operations.fd());
 }
 
 
@@ -42,7 +44,7 @@ Endpoint::
 shutdown()
 {
     pollThread = 0;
-    runOperations();
+    operations.poll(); // flush any pending ops.
 }
 
 bool
@@ -95,10 +97,15 @@ poll(int timeoutMs)
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
-        else if (ev.data.fd == operationsFd.fd()) {
+        else if (ev.data.fd == operations.fd()) {
             SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR),
-                    "Endpoint.meesageFd.EPOLLERR");
-            runOperations();
+                    "Endpoint.operations.EPOLLERR");
+
+            // The caps is required to keep the poll thread responsive when
+            // bombarded with events.
+            enum { OpsCap = 1 << 6 };
+
+            operations.poll(OpsCap);
         }
 
         else onPollEvent(ev);
@@ -111,7 +118,7 @@ Endpoint::
 connect(Socket&& socket)
 {
     if (isOffThread()) {
-        deferOperation(Operation(std::move(socket)));
+        operations.defer(std::move(socket));
         return;
     }
 
@@ -132,7 +139,7 @@ Endpoint::
 disconnect(int fd)
 {
     if (isOffThread()) {
-        deferOperation(Operation(fd));
+        operations.defer(fd);
         return;
     }
 
@@ -285,7 +292,8 @@ Endpoint::
 send(int fd, Payload&& data)
 {
     if (isOffThread()) {
-        deferOperation(Operation(fd, std::move(data)));
+        if (!operations.tryDefer(fd, std::move(data)))
+            dropPayload(fd, std::move(data));
         return;
     }
 
@@ -309,7 +317,8 @@ Endpoint::
 broadcast(Payload&& data)
 {
     if (isOffThread()) {
-        deferOperation(Operation(std::move(data)));
+        if (!operations.tryDefer(std::move(data)))
+            dropPayload(-1, std::move(data));
         return;
     }
 
@@ -351,57 +360,21 @@ flushQueue(int fd)
     disconnect(fd);
 }
 
-void
-Endpoint::
-deferOperation(Operation&& op)
-{
-    assert(isOffThread());
-
-    while (!operations.push(std::move(op))) {
-
-        // non-payload ops are unlikely to be in a time-sensitive part of the
-        // code so retrying is acceptable.
-        // \todo Need something slightly better then spin-waiting.
-        if (!op.isPayload()) continue;
-
-        dropPayload(op.send.fd, std::move(op.send.data));
-        stats.deferPayload++;
-        return;
-    }
-
-    operationsFd.signal();
-}
-
 
 void
 Endpoint::
-runOperations()
+onOperation(Operation&& op)
 {
-    assert(!isOffThread());
+    switch(op.type) {
 
-    while (operationsFd.poll());
+    case Operation::Unicast:   send(op.send.fd, std::move(op.send.data)); break;
+    case Operation::Broadcast: broadcast(std::move(op.send.data)); break;
 
-    // The caps is required to keep the poll thread responsive when bombarded
-    // with events.
-    enum { OpsCap = 1 << 6 };
+    case Operation::Connect:    connect(std::move(op.connect.socket)); break;
+    case Operation::Disconnect: disconnect(op.disconnect.fd); break;
 
-    for (size_t i = 0; !operations.empty() && i < OpsCap; ++i) {
-        Operation op = operations.pop();
-
-        switch(op.type) {
-
-        case Operation::Unicast: send(op.send.fd, std::move(op.send.data)); break;
-        case Operation::Broadcast: broadcast(std::move(op.send.data)); break;
-
-        case Operation::Connect: connect(std::move(op.connect.socket)); break;
-        case Operation::Disconnect: disconnect(op.disconnect.fd); break;
-
-        default: assert(false);
-        }
-
+    default: assert(false);
     }
-
-    if (!operations.empty()) operationsFd.signal();
 }
 
 
