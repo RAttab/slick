@@ -1,0 +1,32 @@
+# Compiled output
+*_test
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# cmake
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+Makefile
+Testing
+CTestTestfile.cmake
+
+# Emacs temp files.
+.#*
+\#*#
+~*
+
+# Test artifacts
+test.log
