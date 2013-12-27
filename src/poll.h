@@ -86,6 +86,10 @@ private:
 /* POLL THREAD DETECTOR                                                       */
 /******************************************************************************/
 
+/** Need something a bit less flimsy since it's open to a race between the first
+    call to poll (which will in turn call set) and any potential off thread
+    operations.
+ */
 struct IsPollThread
 {
     IsPollThread() : pollThread(0) {}
