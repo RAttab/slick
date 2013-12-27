@@ -85,6 +85,7 @@ install(
     src/queue.h
     src/poll.h
     src/notify.h
+    src/timer.h
     src/payload.h
     src/socket.h
     src/queue.h
@@ -100,6 +101,7 @@ add_library(
     SHARED
     src/poll.cpp
     src/notify.cpp
+    src/timer.cpp
     src/payload.cpp
     src/socket.cpp
     src/endpoint.cpp
