@@ -19,7 +19,7 @@ namespace slick {
 /******************************************************************************/
 
 Endpoint::
-Endpoint() : pollThread(0)
+Endpoint()
 {
     using namespace std::placeholders;
     operations.onOperation = std::bind(&Endpoint::onOperation, this, _1);
@@ -43,15 +43,8 @@ void
 Endpoint::
 shutdown()
 {
-    pollThread = 0;
+    isPollThread.unset();
     operations.poll(); // flush any pending ops.
-}
-
-bool
-Endpoint::
-isOffThread() const
-{
-    return pollThread && pollThread != lockless::threadId();
 }
 
 template<typename Payload>
@@ -73,7 +66,7 @@ void
 Endpoint::
 poll(int timeoutMs)
 {
-    pollThread = lockless::threadId(); // \todo This is a bit flimsy.
+    isPollThread.set(); // \todo This is a bit flimsy
 
     while(poller.poll(timeoutMs)) {
 
@@ -98,13 +91,7 @@ poll(int timeoutMs)
         }
 
         else if (ev.data.fd == operations.fd()) {
-            SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR),
-                    "Endpoint.operations.EPOLLERR");
-
-            // The caps is required to keep the poll thread responsive when
-            // bombarded with events.
-            enum { OpsCap = 1 << 6 };
-
+            enum { OpsCap = 1ULL << 6 };
             operations.poll(OpsCap);
         }
 
@@ -117,7 +104,7 @@ void
 Endpoint::
 connect(Socket&& socket)
 {
-    if (isOffThread()) {
+    if (!isPollThread()) {
         operations.defer(std::move(socket));
         return;
     }
@@ -138,7 +125,7 @@ void
 Endpoint::
 disconnect(int fd)
 {
-    if (isOffThread()) {
+    if (!isPollThread()) {
         operations.defer(fd);
         return;
     }
@@ -291,7 +278,7 @@ void
 Endpoint::
 send(int fd, Payload&& data)
 {
-    if (isOffThread()) {
+    if (!isPollThread()) {
         if (!operations.tryDefer(fd, std::move(data)))
             dropPayload(fd, std::move(data));
         return;
@@ -316,7 +303,7 @@ void
 Endpoint::
 broadcast(Payload&& data)
 {
-    if (isOffThread()) {
+    if (!isPollThread()) {
         if (!operations.tryDefer(std::move(data)))
             dropPayload(-1, std::move(data));
         return;

@@ -7,9 +7,10 @@
 
 #pragma once
 
-#include <cassert>
+#include "lockless/tls.h"
 
 #include <functional>
+#include <cassert>
 #include <unordered_map>
 #include <sys/epoll.h>
 
@@ -51,10 +52,10 @@ private:
 struct SourcePoller
 {
     SourcePoller() {}
-    SourcePoller(const SourcePoller&) = delete;
-    SourcePoller& operator=(const SourcePoller&) = delete;
     SourcePoller(SourcePoller&&) = default;
+    SourcePoller(const SourcePoller&) = delete;
     SourcePoller& operator=(SourcePoller&&) = default;
+    SourcePoller& operator=(const SourcePoller&) = delete;
 
 
     typedef std::function<void()> SourceFn;
@@ -78,6 +79,27 @@ struct SourcePoller
 private:
     Epoll poller;
     std::unordered_map<int, SourceFn> sources;
+};
+
+
+/******************************************************************************/
+/* POLL THREAD DETECTOR                                                       */
+/******************************************************************************/
+
+struct IsPollThread
+{
+    IsPollThread() : pollThread(0) {}
+
+    void set() { pollThread = lockless::threadId(); }
+    void unset() { pollThread = 0; }
+
+    bool operator() () const
+    {
+        return !pollThread || pollThread == lockless::threadId();
+    }
+
+private:
+    size_t pollThread;
 };
 
 

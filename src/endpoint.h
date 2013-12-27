@@ -112,11 +112,7 @@ private:
     void flushQueue(int fd);
     void onOperation(Operation&& op);
 
-    bool isOffThread() const;
-
-
-    size_t pollThread;
-
+    IsPollThread isPollThread;
 
     struct ConnectionState
     {
