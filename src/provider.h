@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "base.h"
+#include "endpoint.h"
 #include "naming.h"
 
 #include <string>
@@ -20,7 +20,7 @@ namespace slick {
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
-struct EndpointProvider : public PassiveEndpointBase
+struct EndpointProvider : public PassiveEndpoint
 {
     EndpointProvider(Port port);
     virtual ~EndpointProvider() {}

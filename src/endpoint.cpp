@@ -1,11 +1,11 @@
-/* base.cpp                                 -*- C++ -*-
+/* endpoint.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 29 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Endpoint base implementation.
+   Endpoint implementation.
 */
 
-#include "base.h"
+#include "endpoint.h"
 #include "utils.h"
 
 #include <cassert>
@@ -17,15 +17,15 @@ namespace slick {
 /* ENDPOINT BASE                                                              */
 /******************************************************************************/
 
-EndpointBase::
-EndpointBase() : pollThread(0)
+Endpoint::
+Endpoint() : pollThread(0)
 {
     poller.add(operationsFd.fd());
 }
 
 
-EndpointBase::
-~EndpointBase()
+Endpoint::
+~Endpoint()
 {
     // The extra step is required to not invalidate our iterator
     std::vector<int> toDisconnect;
@@ -37,7 +37,7 @@ EndpointBase::
 }
 
 void
-EndpointBase::
+Endpoint::
 shutdown()
 {
     pollThread = 0;
@@ -45,7 +45,7 @@ shutdown()
 }
 
 bool
-EndpointBase::
+Endpoint::
 isOffThread() const
 {
     return pollThread && pollThread != threadId();
@@ -53,7 +53,7 @@ isOffThread() const
 
 template<typename Payload>
 void
-EndpointBase::
+Endpoint::
 dropPayload(ConnectionHandle conn, Payload&& data) const
 {
     if (!onDroppedPayload) return;
@@ -67,7 +67,7 @@ dropPayload(ConnectionHandle conn, Payload&& data) const
 
 
 void
-EndpointBase::
+Endpoint::
 poll(int timeoutMs)
 {
     pollThread = threadId(); // \todo This is a bit flimsy.
@@ -96,7 +96,7 @@ poll(int timeoutMs)
 
         else if (ev.data.fd == operationsFd.fd()) {
             SLICK_CHECK_ERRNO(!(ev.events & EPOLLERR),
-                    "EndpointBase.meesageFd.EPOLLERR");
+                    "Endpoint.meesageFd.EPOLLERR");
             runOperations();
         }
 
@@ -106,7 +106,7 @@ poll(int timeoutMs)
 
 
 void
-EndpointBase::
+Endpoint::
 connect(Socket&& socket)
 {
     if (isOffThread()) {
@@ -127,7 +127,7 @@ connect(Socket&& socket)
 
 
 void
-EndpointBase::
+Endpoint::
 disconnect(int fd)
 {
     if (isOffThread()) {
@@ -151,7 +151,7 @@ disconnect(int fd)
 
 
 uint8_t*
-EndpointBase::
+Endpoint::
 processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
 {
     uint8_t* it = first;
@@ -174,7 +174,7 @@ processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
 }
 
 void
-EndpointBase::
+Endpoint::
 recvPayload(int fd)
 {
     auto connIt = connections.find(fd);
@@ -195,7 +195,7 @@ recvPayload(int fd)
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             if (errno == EINTR) continue;
-            SLICK_CHECK_ERRNO(read != -1, "EndpointBase.recv");
+            SLICK_CHECK_ERRNO(read != -1, "Endpoint.recv");
         }
 
         if (!read) { // indicates that shutdown was called on the client side.
@@ -219,8 +219,8 @@ recvPayload(int fd)
 
 template<typename Payload>
 void
-EndpointBase::
-pushToSendQueue(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
+Endpoint::
+pushToSendQueue(Endpoint::ConnectionState& conn, Payload&& data, size_t offset)
 {
     enum { MaxQueueSize = 1 << 8 };
 
@@ -235,8 +235,8 @@ pushToSendQueue(EndpointBase::ConnectionState& conn, Payload&& data, size_t offs
 
 template<typename Payload>
 bool
-EndpointBase::
-sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
+Endpoint::
+sendTo(Endpoint::ConnectionState& conn, Payload&& data, size_t offset)
 {
     if (!conn.writable) {
         pushToSendQueue(conn, std::forward<Payload>(data), 0);
@@ -274,13 +274,13 @@ sendTo(EndpointBase::ConnectionState& conn, Payload&& data, size_t offset)
         }
 
         else if (errno == ECONNRESET || errno == EPIPE) return false;
-        SLICK_CHECK_ERRNO(sent >= 0, "EndpointBase.sendTo.send");
+        SLICK_CHECK_ERRNO(sent >= 0, "Endpoint.sendTo.send");
     }
 }
 
 
 void
-EndpointBase::
+Endpoint::
 send(int fd, Payload&& data)
 {
     if (isOffThread()) {
@@ -304,7 +304,7 @@ send(int fd, Payload&& data)
 
 
 void
-EndpointBase::
+Endpoint::
 broadcast(Payload&& data)
 {
     if (isOffThread()) {
@@ -324,7 +324,7 @@ broadcast(Payload&& data)
 
 
 void
-EndpointBase::
+Endpoint::
 flushQueue(int fd)
 {
     auto it = connections.find(fd);
@@ -351,7 +351,7 @@ flushQueue(int fd)
 }
 
 void
-EndpointBase::
+Endpoint::
 deferOperation(Operation&& op)
 {
     assert(isOffThread());
@@ -373,7 +373,7 @@ deferOperation(Operation&& op)
 
 
 void
-EndpointBase::
+Endpoint::
 runOperations()
 {
     assert(!isOffThread());
@@ -409,8 +409,8 @@ runOperations()
 /******************************************************************************/
 
 
-PassiveEndpointBase::
-PassiveEndpointBase(Port port) :
+PassiveEndpoint::
+PassiveEndpoint(Port port) :
     sockets(port, SOCK_NONBLOCK)
 {
     for (int fd : sockets.fds())
@@ -418,8 +418,8 @@ PassiveEndpointBase(Port port) :
 }
 
 
-PassiveEndpointBase::
-~PassiveEndpointBase()
+PassiveEndpoint::
+~PassiveEndpoint()
 {
     for (int fd : sockets.fds())
         poller.del(fd);
@@ -427,7 +427,7 @@ PassiveEndpointBase::
 
 
 void
-PassiveEndpointBase::
+PassiveEndpoint::
 onPollEvent(struct epoll_event& ev)
 {
     assert(ev.events == EPOLLIN);

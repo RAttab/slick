@@ -31,7 +31,7 @@ connect(const Address& addr)
     if (!socket) return -1;
 
     int fd = socket.fd();
-    EndpointBase::connect(std::move(socket));
+    Endpoint::connect(std::move(socket));
     return fd;
 }
 
@@ -39,7 +39,7 @@ void
 EndpointClient::
 disconnect(ConnectionHandle h)
 {
-    EndpointBase::disconnect(h);
+    Endpoint::disconnect(h);
 }
 
 

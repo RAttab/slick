@@ -82,7 +82,7 @@ install(
     src/payload.h
     src/socket.h
     src/queue.h
-    src/base.h
+    src/endpoint.h
     src/client.h
     src/provider.h
 
@@ -97,7 +97,7 @@ add_library(
     src/notify.cpp
     src/payload.cpp
     src/socket.cpp
-    src/base.cpp
+    src/endpoint.cpp
     src/client.cpp
     src/provider.cpp)
 

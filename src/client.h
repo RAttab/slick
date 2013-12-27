@@ -5,7 +5,7 @@
    Endpoint client
 */
 
-#include "base.h"
+#include "endpoint.h"
 #include "naming.h"
 
 #include <memory>
@@ -17,7 +17,7 @@ namespace slick {
 /* ENDPOINT CLIENT                                                            */
 /******************************************************************************/
 
-struct EndpointClient : public EndpointBase
+struct EndpointClient : public Endpoint
 {
     EndpointClient() {}
 

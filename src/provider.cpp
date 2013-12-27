@@ -17,7 +17,7 @@ namespace slick {
 
 EndpointProvider::
 EndpointProvider(Port port) :
-    PassiveEndpointBase(port)
+    PassiveEndpoint(port)
 {
 }
 

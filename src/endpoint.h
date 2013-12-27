@@ -1,4 +1,4 @@
-/* base.h                                 -*- C++ -*-
+/* endpoint.h                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 29 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
@@ -26,13 +26,13 @@ namespace slick {
 
 typedef int ConnectionHandle;
 
-struct EndpointBase
+struct Endpoint
 {
-    EndpointBase();
-    virtual ~EndpointBase();
+    Endpoint();
+    virtual ~Endpoint();
 
-    EndpointBase(const EndpointBase&) = delete;
-    EndpointBase& operator=(const EndpointBase&) = delete;
+    Endpoint(const Endpoint&) = delete;
+    Endpoint& operator=(const Endpoint&) = delete;
 
 
     typedef std::function<void(ConnectionHandle h)> ConnectionFn;
@@ -211,10 +211,10 @@ private:
 /* PASSIVE ENDPOINT BASE                                                      */
 /******************************************************************************/
 
-struct PassiveEndpointBase : public EndpointBase
+struct PassiveEndpoint : public Endpoint
 {
-    PassiveEndpointBase(Port port);
-    virtual ~PassiveEndpointBase();
+    PassiveEndpoint(Port port);
+    virtual ~PassiveEndpoint();
 
 protected:
     virtual void onPollEvent(struct epoll_event& ev);
