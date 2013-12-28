@@ -7,6 +7,10 @@
 
 #include "discovery.h"
 
+#include <algorithm>
+#include <vector>
+#include <functional>
+
 namespace slick {
 
 

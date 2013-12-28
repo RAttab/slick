@@ -7,6 +7,13 @@
 
 #pragma once
 
+#include "endpoint.h"
+#include "poll.h"
+#include "defer.h"
+
+#include <string>
+#include <functional>
+
 namespace slick {
 
 /******************************************************************************/
@@ -67,7 +74,7 @@ private:
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
-struct DistributedDiscovery
+struct DistributedDiscovery : public Discovery
 {
     enum { DefaultPort = 18888 };
 
