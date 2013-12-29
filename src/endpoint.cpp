@@ -153,7 +153,7 @@ processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
 
     while (it < last) {
         size_t leftover = last - it;
-        Payload data = proto::fromBuffer(it, leftover);
+        Payload data = Payload::read(it, leftover);
 
         if (!data.packetSize()) {
             std::copy(it, last, first);
