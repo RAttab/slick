@@ -60,13 +60,19 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
 {
     using namespace std::placeholders;
 
-    endpoint.onMessage = bind(&DistributedDiscovery::onMessage, this, _1, _2);
+    endpoint.onPayload = bind(&DistributedDiscovery::onMessage, this, _1, _2);
     endpoint.onConnect = bind(&DistributedDiscovery::onConnect, this, _1);
     endpoint.onDisconnect = bind(&DistributedDiscovery::onDisconnect, this, _1);
     poller.add(endpoint);
 
-    operations.onOperations = bind(&DistributedDiscovery::onOperation, this, _1);
-    poller.add(operations);
+    retracts.onOperation = std::bind(&DistributedDiscovery::retract, this, _1);
+    poller.add(retracts);
+
+    publishes.onOperation = std::bind(&DistributedDiscovery::publish, this, _1, _2);
+    poller.add(publishes);
+
+    discover.onOperation = std::bind(&DistributedDiscovery::discover, this, _1, _2);
+    poller.add(discover);
 
     timer.onTimer = bind(&DistributedDiscovery::onTimer, this);
     poller.add(timer);
@@ -93,7 +99,7 @@ DistributedDiscovery::
 discover(const std::string& key, const WatchFn& watch)
 {
     if (!isPollThread()) {
-        operations.defer(key, watch);
+        discovers.defer(key, watch);
         return;
     }
 
@@ -104,7 +110,7 @@ DistributedDiscovery::
 publish(const std::string& key, Payload&& data)
 {
     if (!isPollThread()) {
-        operations.defer(key, std::move(data));
+        publishes.defer(key, std::move(data));
         return;
     }
 
@@ -115,7 +121,7 @@ DistributedDiscovery::
 retract(const std::string& key)
 {
     if (!isPollThread()) {
-        operations.defer(key);
+        retracts.defer(key);
         return;
     }
 
@@ -123,20 +129,7 @@ retract(const std::string& key)
 
 void
 DistributedDiscovery::
-onOperation(Operation&& op)
-{
-    switch(op.type) {
-    case Operation::Retract: retract(std::move(op.key)); break;
-    case Operation::Publish: publish(std::move(op.key), op.pub.data); break;
-    case Operation::Discover: discover(std::move(op.key), op.disc.watch); break;
-    default: assert(false);
-    }
-}
-
-
-void
-DistributedDiscovery::
-onMessage(ConnectionHandle handle, Payload&& data)
+onPayload(ConnectionHandle handle, Payload&& data)
 {
 
 }

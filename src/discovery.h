@@ -92,7 +92,7 @@ struct DistributedDiscovery : public Discovery
 private:
 
     void onTimer();
-    void onMessage(ConnectionHandle handle, Payload&& data);
+    void onPayload(ConnectionHandle handle, Payload&& data);
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
     void onOperation(Operation&& op);
@@ -118,41 +118,10 @@ private:
     std::unordered_map<std::string, WatchList> watches;
     std::unordered_map<std::string, Payload> data;
 
-    struct Operation
-    {
-        enum Type { None, Discover, Publish, Retract };
-
-        Operation() : type(None) {}
-
-        Operation(std::string key) : type(Retract), key(std::move(key)) {}
-
-        Operation(std::string key, Payload&& data) :
-            type(Publish), key(std::move(key))
-        {
-            pub.data = std::move(data);
-        }
-
-        Operation(std::string key, WatchFn watch) :
-            type(Discover), key(std::move(key))
-        {
-            disc.watch = std::move(watch);
-        }
-
-        Operation(const Operation&) = delete;
-        Operation& operator=(const Operation&) = delete;
-
-        Operation(Operation&&) = default;
-        Operation& operator=(Operation&&) = default;
-
-
-        Type type;
-
-        std::string key;
-        struct { WatchFn watch; } disc;
-        struct { Payload data; } pub;
-    };
-
-    Defer<Operation> operations;
+    enum { QueueSize = 1 << 4 };
+    Defer<QueueSize, std::string> retracts;
+    Defer<QueueSize, std::string, Payload> publishes;
+    Defer<QueueSize, std::string, WatchFn> discovers;
 
     NodeList::RNG rng;
 };
