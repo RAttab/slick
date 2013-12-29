@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <cassert>
+#include <cstring>
 #include <endian.h> // linux specific
 
 
@@ -25,15 +26,67 @@ namespace slick {
 /* ENDIAN                                                                     */
 /******************************************************************************/
 
-inline uint8_t  hton(uint8_t  val) { return val; }
-inline uint16_t hton(uint16_t val) { return htobe16(val); }
-inline uint32_t hton(uint32_t val) { return htobe32(val); }
-inline uint64_t hton(uint64_t val) { return htobe64(val); }
+namespace details {
 
-inline uint8_t  ntoh(uint8_t  val) { return val; }
-inline uint16_t ntoh(uint16_t val) { return be16toh(val); }
-inline uint32_t ntoh(uint32_t val) { return be32toh(val); }
-inline uint64_t ntoh(uint64_t val) { return be64toh(val); }
+template<typename T, size_t N>
+struct IsSizedNumber
+{
+    static constexpr bool value =
+        std::is_arithmetic<T>::value && sizeof(T) == N;
+};
+
+} // namespace details
+
+
+template<typename T>
+T hton(T val, typename std::enable_if< details::IsSizedNumber<T, 1>::value >::type* = 0)
+{
+    return val;
+}
+
+template<typename T>
+T hton(T val, typename std::enable_if< details::IsSizedNumber<T, 2>::value >::type* = 0)
+{
+    return htobe16(val);
+}
+
+template<typename T>
+T hton(T val, typename std::enable_if< details::IsSizedNumber<T, 4>::value >::type* = 0)
+{
+    return htobe32(val);
+}
+
+template<typename T>
+T hton(T val, typename std::enable_if< details::IsSizedNumber<T, 8>::value >::type* = 0)
+{
+    return htobe64(val);
+}
+
+
+
+template<typename T>
+T ntoh(T val, typename std::enable_if< details::IsSizedNumber<T, 1>::value >::type* = 0)
+{
+    return val;
+}
+
+template<typename T>
+T ntoh(T val, typename std::enable_if< details::IsSizedNumber<T, 2>::value >::type* = 0)
+{
+    return be16toh(val);
+}
+
+template<typename T>
+T ntoh(T val, typename std::enable_if< details::IsSizedNumber<T, 4>::value >::type* = 0)
+{
+    return be32toh(val);
+}
+
+template<typename T>
+T ntoh(T val, typename std::enable_if< details::IsSizedNumber<T, 8>::value >::type* = 0)
+{
+    return be64toh(val);
+}
 
 
 /******************************************************************************/
@@ -59,7 +112,7 @@ Payload pack(const T& value)
     PackIt last = first + dataSize;
     Pack<T>::pack(value, first, last);
 
-    return Payload(bytes.release());
+    return Payload (bytes.release());
 }
 
 template<typename T>
@@ -73,26 +126,24 @@ T unpack(const Payload& data)
 
 
 /******************************************************************************/
-/* INTEGERS                                                                   */
+/* ARITHMETIC TYPES                                                           */
 /******************************************************************************/
 
-template<typename Int>
-struct Pack<Int, typename std::enable_if< std::is_integral<Int>::value >::type>
+template<typename T>
+struct Pack<T, typename std::enable_if< std::is_arithmetic<T>::value >::type>
 {
-    static constexpr size_t size(Int) { return sizeof(Int); }
+    static constexpr size_t size(T) { return sizeof(T); }
 
-    static void pack(Int value, PackIt first, PackIt last)
+    static void pack(T value, PackIt first, PackIt last)
     {
-        assert(size_t(last - first) >= sizeof(Int));
-        *reinterpret_cast<Int*>(first) = hton(value);
+        assert(size_t(last - first) >= size(value));
+        *reinterpret_cast<T*>(first) = hton(value);
     }
 
-    static Int unpack(ConstPackIt first, ConstPackIt last)
+    static T unpack(ConstPackIt first, ConstPackIt last)
     {
-        assert(size_t(last - first) >= sizeof(Int));
-
-        Int value = *reinterpret_cast<const Int*>(first);
-        return ntoh(value);
+        assert(size_t(last - first) >= sizeof(T));
+        return ntoh(*reinterpret_cast<const T*>(first));
     }
 
 };
@@ -109,7 +160,7 @@ struct Pack<std::string>
 
     static void pack(const std::string& value, PackIt first, PackIt last)
     {
-        assert(size_t(last - first) >= value.size() + 1);
+        assert(size_t(last - first) >= size(value));
 
         std::copy(value.begin(), value.end(), first);
         *(first + value.size()) = '\0';
@@ -117,11 +168,51 @@ struct Pack<std::string>
 
     static std::string unpack(ConstPackIt first, ConstPackIt last)
     {
+        assert(std::find(first, last, '\0') != last);
+
         std::string value(reinterpret_cast<const char*>(first), last - first);
 
         assert(*(first + value.size()) == '\0');
 
         return std::move(value);
+    }
+};
+
+
+/******************************************************************************/
+/* CHAR                                                                       */
+/******************************************************************************/
+
+namespace details {
+
+template<typename T>
+struct IsCharPtr
+{
+    static constexpr bool isCharArray =
+        std::is_array<T>::value &&
+        std::is_same<char,
+            typename std::remove_const<
+                typename std::remove_extent<T>::type>::type>::value;
+
+    static constexpr bool isCharPtr =
+        std::is_pointer<T>::value &&
+        std::is_same<char,
+            typename std::remove_const<
+                typename std::remove_pointer<T>::type>::type>::value;
+
+    static constexpr bool value = isCharArray || isCharPtr;
+};
+
+} // namespace details
+
+
+template<typename T>
+struct Pack<T, typename std::enable_if< details::IsCharPtr<T>::value >::type>
+{
+    static size_t size(const char* value) { return std::strlen(value) + 1; }
+    static void pack(const char* value, PackIt first, PackIt last)
+    {
+        std::strncpy(reinterpret_cast<char*>(first), value, last - first);
     }
 };
 
