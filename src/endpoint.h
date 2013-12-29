@@ -136,68 +136,15 @@ private:
 
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
 
+    enum { SendSize = 1 << 6 };
+    Defer<SendSize, int, Payload> sends;
+    Defer<SendSize, Payload> broadcasts;
 
-    struct Operation
-    {
-        enum Type { None, Unicast, Broadcast, Connect, Disconnect };
+    enum { ConnectSize = 1 << 4 };
+    Defer<ConnectSize, Socket> connects;
+    Defer<ConnectSize, int> disconnects;
 
-        Operation() : type(None) {}
-
-        Operation(int fd, Payload&& data) : type(Unicast)
-        {
-            send.fd = fd;
-            send.data = std::move(data);
-        }
-
-        template<typename Payload>
-        explicit Operation(Payload&& data) : type(Broadcast)
-        {
-            send.data = std::forward<Payload>(data);
-        }
-
-        explicit Operation(Socket&& socket) : type(Connect)
-        {
-            connect.socket = std::move(socket);
-        }
-
-        explicit Operation(int disconnectFd) : type(Disconnect)
-        {
-            disconnect.fd = disconnectFd;
-        }
-
-        Operation(Operation&& other) noexcept
-        {
-            *this = std::move(other);
-        }
-
-        Operation& operator=(Operation&& other) noexcept
-        {
-            type = other.type;
-            send.fd = other.send.fd;
-            send.data = std::move(other.send.data);
-            connect.socket = std::move(other.connect.socket);
-            disconnect.fd = other.disconnect.fd;
-
-            return *this;
-        }
-
-        Operation(const Operation&) = delete;
-        Operation& operator=(const Operation&) = delete;
-
-        bool isPayload() const { return type == Unicast || type == Broadcast; }
-
-        Type type;
-
-        struct {
-            int fd;
-            Payload data;
-        } send;
-
-        struct { Socket socket; } connect;
-        struct { int fd; } disconnect;
-    };
-
-    Defer<Operation> operations;
+    enum { DeferCap = 1 << 6 };
 };
 
 

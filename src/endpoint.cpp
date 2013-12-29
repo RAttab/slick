@@ -22,8 +22,20 @@ Endpoint::
 Endpoint()
 {
     using namespace std::placeholders;
-    operations.onOperation = std::bind(&Endpoint::onOperation, this, _1);
-    poller.add(operations.fd());
+
+    typedef void (Endpoint::*SendFn) (ConnectionHandle, Payload&&);
+    sends.onOperation = std::bind((SendFn)&Endpoint::send, this, _1, _2);
+    poller.add(sends.fd());
+
+    typedef void (Endpoint::*BroadcastFn) (Payload&&);
+    broadcasts.onOperation = std::bind((BroadcastFn)&Endpoint::broadcast, this, _1);
+    poller.add(broadcasts.fd());
+
+    connects.onOperation = std::bind(&Endpoint::connect, this, _1);
+    poller.add(connects.fd());
+
+    disconnects.onOperation = std::bind(&Endpoint::disconnect, this, _1);
+    poller.add(disconnects.fd());
 }
 
 
@@ -44,7 +56,12 @@ Endpoint::
 shutdown()
 {
     isPollThread.unset();
-    operations.poll(); // flush any pending ops.
+
+    // flush any pending ops.
+    sends.poll();
+    broadcasts.poll();
+    connects.poll();
+    disconnects.poll();;
 }
 
 template<typename Payload>
@@ -90,10 +107,10 @@ poll(int timeoutMs)
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
-        else if (ev.data.fd == operations.fd()) {
-            enum { OpsCap = 1ULL << 6 };
-            operations.poll(OpsCap);
-        }
+        else if (ev.data.fd == sends.fd())       sends.poll(DeferCap);
+        else if (ev.data.fd == broadcasts.fd())  broadcasts.poll(DeferCap);
+        else if (ev.data.fd == connects.fd())    connects.poll(DeferCap);
+        else if (ev.data.fd == disconnects.fd()) disconnects.poll(DeferCap);
 
         else onPollEvent(ev);
     }
@@ -105,7 +122,7 @@ Endpoint::
 connect(Socket&& socket)
 {
     if (!isPollThread()) {
-        operations.defer(std::move(socket));
+        connects.defer(std::move(socket));
         return;
     }
 
@@ -126,7 +143,7 @@ Endpoint::
 disconnect(int fd)
 {
     if (!isPollThread()) {
-        operations.defer(fd);
+        disconnects.defer(fd);
         return;
     }
 
@@ -279,7 +296,7 @@ Endpoint::
 send(int fd, Payload&& data)
 {
     if (!isPollThread()) {
-        if (!operations.tryDefer(fd, std::move(data)))
+        if (!sends.tryDefer(fd, data))
             dropPayload(fd, std::move(data));
         return;
     }
@@ -304,7 +321,7 @@ Endpoint::
 broadcast(Payload&& data)
 {
     if (!isPollThread()) {
-        if (!operations.tryDefer(std::move(data)))
+        if (!broadcasts.tryDefer(data))
             dropPayload(-1, std::move(data));
         return;
     }
@@ -345,23 +362,6 @@ flushQueue(int fd)
         dropPayload(fd, std::move(queue[i].first));
 
     disconnect(fd);
-}
-
-
-void
-Endpoint::
-onOperation(Operation&& op)
-{
-    switch(op.type) {
-
-    case Operation::Unicast:   send(op.send.fd, std::move(op.send.data)); break;
-    case Operation::Broadcast: broadcast(std::move(op.send.data)); break;
-
-    case Operation::Connect:    connect(std::move(op.connect.socket)); break;
-    case Operation::Disconnect: disconnect(op.disconnect.fd); break;
-
-    default: assert(false);
-    }
 }
 
 

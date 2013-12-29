@@ -9,65 +9,95 @@
 
 #include "queue.h"
 
+#include <tuple>
+#include <functional>
+
+
 namespace slick {
 
 
 /******************************************************************************/
-/* DEFER OP                                                                   */
+/* INVOKE                                                                     */
 /******************************************************************************/
 
-template<typename Operation, size_t QueueSize = 1ULL << 6>
+namespace details {
+
+template<size_t...> struct Seq {};
+
+template<size_t N, size_t... S>
+struct GenSeq : public GenSeq<N-1, N-1, S...> {};
+
+template<size_t... S>
+struct GenSeq<0, S...>
+{
+    typedef Seq<S...> type;
+};
+
+template<typename Fn, typename... Args, size_t... S>
+void invoke(const Fn& fn, std::tuple<Args...>& tuple, Seq<S...>)
+{
+    fn(std::move(std::get<S>(tuple))...);
+}
+
+template<typename Fn, typename... Args>
+void invoke(const Fn& fn, std::tuple<Args...>& tuple)
+{
+    invoke(fn, tuple, typename GenSeq<sizeof...(Args)>::type());
+}
+
+} // namespace details
+
+
+/******************************************************************************/
+/* DEFER                                                                      */
+/******************************************************************************/
+
+template<size_t QueueSize, typename... Items>
 struct Defer
 {
-    typedef std::function<void(Operation&&)> OperationFn;
+    typedef std::function<void(Items&&...)> OperationFn;
     OperationFn onOperation;
 
-    void defer(Operation&& op)
-    {
-        while (!operations.push(std::move(op)));
-        notify.signal();
-    }
-
-    template<typename... Args>
-    void defer(Args&&... args)
-    {
-        defer(Operation(std::forward<Args>(args)...));
-    }
-
-
-    bool tryDefer(Operation&& op)
-    {
-        if (!operations.push(std::move(op)))
-            return false;
-
-        notify.signal();
-        return true;
-    }
-
-    template<typename... Args>
-    bool tryDefer(Args&&... args)
-    {
-        return tryDefer(Operation(std::forward<Args>(args)...));
-    }
-
-
     int fd() const { return notify.fd(); }
+
     void poll(size_t cap = 0)
     {
         assert(onOperation);
 
         while (notify.poll());
 
-        for (size_t i = 0; !operations.empty() && (!cap || i < cap); ++i) {
-            Operation op = operations.pop();
-            onOperation(std::move(op));
+        for (size_t i = 0; !queue.empty() && (!cap || i < cap); ++i) {
+            auto op = queue.pop();
+            details::invoke(onOperation, op);
         }
 
-        if (!operations.empty()) notify.signal();
+        if (!queue.empty()) notify.signal();
+    }
+
+    template<typename... Args>
+    void defer(Args&&... args)
+    {
+        auto op = std::make_tuple(std::forward<Args>(args)...);
+
+        while (!queue.push(std::move(op)));
+        notify.signal();
+    }
+
+    template<typename... Args>
+    bool tryDefer(Args&&... args)
+    {
+        auto op = std::make_tuple(std::forward<Args>(args)...);
+
+        if (!queue.push(std::move(op)))
+            return false;
+
+        notify.signal();
+        return true;
     }
 
 private:
-    Queue<Operation, QueueSize> operations;
+
+    Queue<std::tuple<Items...>, QueueSize> queue;
     Notify notify;
 };
 
