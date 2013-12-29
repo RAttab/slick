@@ -7,6 +7,17 @@
 
 #pragma once
 
+#include "payload.h"
+
+#include <memory>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <type_traits>
+#include <cassert>
+#include <endian.h> // linux specific
+
+
 namespace slick {
 
 
@@ -29,12 +40,16 @@ inline uint64_t ntoh(uint64_t val) { return be64toh(val); }
 /* PACK                                                                       */
 /******************************************************************************/
 
+template<typename T, typename Enable = void> struct Pack;
+
 typedef uint8_t* PackIt;
+typedef const uint8_t* ConstPackIt;
+
 
 template<typename T>
 Payload pack(const T& value)
 {
-    size_t dataSize = packSize(value);
+    size_t dataSize = Pack<T>::size(value);
     size_t totalSize = dataSize + sizeof(Payload::SizeT);
     std::unique_ptr<uint8_t[]> bytes(new uint8_t[totalSize]);
 
@@ -42,7 +57,7 @@ Payload pack(const T& value)
 
     PackIt first = bytes.get() + sizeof(Payload::SizeT);
     PackIt last = first + dataSize;
-    pack(value, first, last);
+    Pack<T>::pack(value, first, last);
 
     return Payload(bytes.release());
 }
@@ -50,17 +65,10 @@ Payload pack(const T& value)
 template<typename T>
 T unpack(const Payload& data)
 {
-    PackIt first = data.bytes();
-    PackIt last = first + data.size();
+    ConstPackIt first = data.bytes();
+    ConstPackIt last = first + data.size();
 
-    return unpack<T>(first, last);
-}
-
-/** This is a default. Override for fancy stuff */
-template<typename T>
-size_t packSize(const T& value)
-{
-    return sizeof(T);
+    return Pack<T>::unpack(first, last);
 }
 
 
@@ -69,23 +77,25 @@ size_t packSize(const T& value)
 /******************************************************************************/
 
 template<typename Int>
-void pack(Int value, PackIt first, PackIt last,
-        typename typename std::enable_if<std::is_integral<Int>::type>::type* = 0)
+struct Pack<Int, typename std::enable_if< std::is_integral<Int>::value >::type>
 {
-    assert(last - first >= sizeof(Int));
+    static constexpr size_t size(Int) { return sizeof(Int); }
 
-    *reinterpret_cast<Int*>(first) = hton(value);
-}
+    static void pack(Int value, PackIt first, PackIt last)
+    {
+        assert(size_t(last - first) >= sizeof(Int));
+        *reinterpret_cast<Int*>(first) = hton(value);
+    }
 
-template<typename Int>
-Int unpack(PackIt first, PackIt last,
-        typename typename std::enable_if<std::is_integral<Int>::type>::type* = 0)
-{
-    assert(last - first >= sizeof(Int));
+    static Int unpack(ConstPackIt first, ConstPackIt last)
+    {
+        assert(size_t(last - first) >= sizeof(Int));
 
-    Int value = *reinterpret_cast<Int*>(first);
-    return ntoh(value);
-}
+        Int value = *reinterpret_cast<const Int*>(first);
+        return ntoh(value);
+    }
+
+};
 
 
 /******************************************************************************/
@@ -93,44 +103,27 @@ Int unpack(PackIt first, PackIt last,
 /******************************************************************************/
 
 template<>
-size_t packSize<std::string>(const std::string& value)
+struct Pack<std::string>
 {
-    return value.size() + 1;
-}
+    static size_t size(const std::string& value) { return value.size() + 1; }
 
-void pack(const std::string& value, PackIt first, PackIt last)
-{
-    assert(last - first >= value.size() + 1);
+    static void pack(const std::string& value, PackIt first, PackIt last)
+    {
+        assert(size_t(last - first) >= value.size() + 1);
 
-    std::copy(value.begin(), value.end(), first);
-    *(first + value.size()) = '\0';
-}
+        std::copy(value.begin(), value.end(), first);
+        *(first + value.size()) = '\0';
+    }
 
-std::string unpack(PackIt first, PackIt last)
-{
-    std::string value(first, last - first);
+    static std::string unpack(ConstPackIt first, ConstPackIt last)
+    {
+        std::string value(reinterpret_cast<const char*>(first), last - first);
 
-    assert(*(first + value.size()) == '\0');
+        assert(*(first + value.size()) == '\0');
 
-    return std::move(value);
-}
-
-
-// These are only convenience functions and no unpack is provided for char*.
-
-template<>
-size_t packSize<const char*>(const char* value)
-{
-    return std::strlen(value) + 1;
-}
-
-void pack(const char* value, PackIt first, PackIt last)
-{
-    assert(last - first >= value.size() + 1);
-
-    std::copy(value.begin(), value.end(), first);
-    *(first + value.size()) = '\0';
-}
+        return std::move(value);
+    }
+};
 
 
 /******************************************************************************/
@@ -138,50 +131,53 @@ void pack(const char* value, PackIt first, PackIt last)
 /******************************************************************************/
 
 template<typename T>
-size_t packSize< std::vector<T> >(const std::vector<T>& value)
+struct Pack< std::vector<T> >
 {
-    // \todo Confirm that the compiler is capable of optimizing out the loop for
-    // fixed width types. Not sure if it's smart enough to figure out the
-    // for-each loop; might need to switch to a plain old for i loop.
+    static size_t size(const std::vector<T>& value)
+    {
+        // \todo Confirm that the compiler is capable of optimizing out the loop
+        // for fixed width types. Not sure if it's smart enough to figure out
+        // the for-each loop; might need to switch to a plain old for i loop.
 
-    size_t size = sizeof(Payload::SizeT);
-    for (const auto& item: value) size += packSize(item);
-    return size;
-}
-
-template<typename T>
-void pack(const std::vector<T>& value, PackIt first, PackIt last)
-{
-    *reinterpret_cast<Payload::SizeT*>(first) = value.size();
-
-    PackIt it = first + sizeof(Payload::SizeT);
-    for (const auto& item : value) {
-        size_t size = packSize(item);
-        assert(it + size < last);
-
-        pack(item, it, last);
-        it += size;
-    }
-}
-
-std::vector<T> unpack(PackIt first, PackIt last)
-{
-    size_t size = *reinterpret_cast<Payload::SizeT*>(first);
-
-    std::vector<T> value;
-    value.reserve(size);
-
-    PackIt it = first + sizeof(Payload::SizeT);
-    for (size_t i = 0; i < size; ++i) {
-        T item = unpack(it, last);
-
-        it += packSize(item);
-        assert(it < last);
-
-        value.emplace_back(std::move(item));
+        size_t size = sizeof(Payload::SizeT);
+        for (const auto& item: value) size += Pack<T>::size(item);
+        return size;
     }
 
-    return std::move(value);
-}
+    static void pack(const std::vector<T>& value, PackIt first, PackIt last)
+    {
+        *reinterpret_cast<Payload::SizeT*>(first) = value.size();
+
+        PackIt it = first + sizeof(Payload::SizeT);
+        for (const auto& item : value) {
+            size_t size = Pack<T>::size(item);
+            assert(it + size < last);
+
+            Pack<T>::pack(item, it, last);
+            it += size;
+        }
+    }
+
+    static std::vector<T> unpack(ConstPackIt first, ConstPackIt last)
+    {
+        size_t size = *reinterpret_cast<Payload::SizeT*>(first);
+
+        std::vector<T> value;
+        value.reserve(size);
+
+        PackIt it = first + sizeof(Payload::SizeT);
+        for (size_t i = 0; i < size; ++i) {
+            T item = Pack<T>::unpack(it, last);
+
+            it += Pack<T>::size(item);
+            assert(it < last);
+
+            value.emplace_back(std::move(item));
+        }
+
+        return std::move(value);
+    }
+
+};
 
 } // slick
