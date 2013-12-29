@@ -2,7 +2,10 @@
    Rémi Attab (remi.attab@gmail.com), 28 Dec 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Packing framework
+   Serialization framework.
+
+   Note that this assumes that both end of the communication will have the same
+   binary representation for floats.
 */
 
 #pragma once
@@ -130,6 +133,12 @@ typedef const uint8_t* ConstPackIt;
 
 
 template<typename T>
+size_t packedSize(const T& value)
+{
+    return Pack<T>::size(value);
+}
+
+template<typename T>
 Payload pack(const T& value)
 {
     size_t dataSize = Pack<T>::size(value);
@@ -152,6 +161,45 @@ T unpack(const Payload& data)
     ConstPackIt last = first + data.size();
 
     return Pack<T>::unpack(first, last);
+}
+
+template<typename T>
+void unpack(T& value, const Payload& data)
+{
+    value = unpack<T>(data);
+}
+
+
+/******************************************************************************/
+/* UTILS                                                                      */
+/******************************************************************************/
+
+size_t packedSizeAll() { return 0; }
+
+template<typename Arg, typename... Rest>
+size_t packedSizeAll(const Arg& arg, const Rest&... rest)
+{
+    return Pack<Arg>::size(arg) + packedSizeAll(rest...);
+}
+
+
+PackIt packAll(PackIt first, PackIt) { return first; }
+
+template<typename Arg, typename... Rest>
+PackIt packAll(PackIt first, PackIt last, const Arg& arg, const Rest&... rest)
+{
+    Pack<Arg>::pack(arg, first, last);
+    return packAll(first + packedSize(arg), last, rest...);
+}
+
+
+ConstPackIt unpackAll(ConstPackIt first, ConstPackIt) { return first; }
+
+template<typename Arg, typename... Rest>
+ConstPackIt unpackAll(ConstPackIt first, ConstPackIt last, Arg& arg, Rest&... rest)
+{
+    arg = Pack<Arg>::unpack(first, last);
+    return unpackAll(first + packedSize(arg), last, rest...);
 }
 
 

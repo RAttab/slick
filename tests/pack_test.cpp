@@ -118,3 +118,55 @@ BOOST_AUTO_TEST_CASE(vectors)
                 { "wee", "wheee", "whoooooo", "whoooooosh" }
             });
 }
+
+
+/******************************************************************************/
+/* CUSTOM                                                                     */
+/******************************************************************************/
+
+struct Foo
+{
+    double count;
+    std::string name;
+    std::vector<size_t> list;
+
+    bool operator==(const Foo& other) const
+    {
+        return
+            count == other.count &&
+            name == other.name &&
+            std::equal(list.begin(), list.end(), other.list.begin());
+    }
+};
+
+namespace slick{
+
+template<>
+struct Pack<Foo>
+{
+    static size_t size(const Foo& v)
+    {
+        return packedSizeAll(v.count, v.name, v.list);
+    }
+
+    static void pack(const Foo& v, PackIt first, PackIt last)
+    {
+        packAll(first, last, v.count, v.name, v.list);
+    }
+
+    static Foo unpack(ConstPackIt first, ConstPackIt last)
+    {
+        Foo v;
+        unpackAll(first, last, v.count, v.name, v.list);
+        return std::move(v);
+    }
+};
+
+} // namespace slick
+
+BOOST_AUTO_TEST_CASE(customs)
+{
+    Foo value = { 1.0,  "Bob the structure", { 1, 2, 3, 4 } };
+    Foo result = unpack<Foo>(pack(value));
+    BOOST_CHECK(value == result);
+}
