@@ -206,7 +206,7 @@ struct Pack<std::string>
 
 
 /******************************************************************************/
-/* CHAR                                                                       */
+/* C STRING                                                                   */
 /******************************************************************************/
 
 namespace details {
@@ -232,6 +232,7 @@ struct IsCharPtr
 } // namespace details
 
 
+/* This is one way only because unpack would not be exception safe. */
 template<typename T>
 struct Pack<T, typename std::enable_if< details::IsCharPtr<T>::value >::type>
 {
