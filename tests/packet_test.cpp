@@ -7,6 +7,7 @@
 
 #include "client.h"
 #include "provider.h"
+#include "pack.h"
 #include "test_utils.h"
 #include "lockless/format.h"
 #include "lockless/tm.h"
@@ -110,7 +111,7 @@ void runClient(vector<string> uris)
 
     thread pollTh([&] { while (true) client.poll(100); });
 
-    Payload payload = proto::fromString(string(PayloadSize, 'a'));
+    Payload payload = pack(string(PayloadSize, 'a'));
     auto sendFn = [&] {
         while (true) {
             client.broadcast(payload);

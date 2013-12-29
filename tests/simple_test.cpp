@@ -10,6 +10,7 @@
 
 #include "provider.h"
 #include "client.h"
+#include "pack.h"
 #include "utils.h"
 #include "test_utils.h"
 #include "lockless/format.h"
@@ -46,9 +47,9 @@ BOOST_AUTO_TEST_CASE(basics)
     };
 
     provider.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
-        std::string msg = proto::toString(data);
+        auto msg = unpack<std::string>(data);
         printf("prv: got(%d) %s\n", conn, msg.c_str());
-        provider.broadcast(proto::fromString("PONG"));
+        provider.broadcast(pack("PONG"));
         pingRecv++;
     };
 
@@ -63,7 +64,7 @@ BOOST_AUTO_TEST_CASE(basics)
     };
 
     client.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
-        std::string msg = proto::toString(data);
+        auto msg = unpack<std::string>(data);
         printf("cli: got(%d) %s\n", conn, msg.c_str());
         pongRecv++;
     };
@@ -79,7 +80,7 @@ BOOST_AUTO_TEST_CASE(basics)
         for (size_t j = 0; j <= i; ++j) ss << to_string(j) << " ";
         ss << "}";
 
-        client.broadcast(proto::fromString(ss.str()));
+        client.broadcast(pack(ss.str()));
     }
 
     lockless::sleep(100);
@@ -114,10 +115,10 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
         weak_ptr<EndpointProvider> prov(providers[id]);
         providers[id]->onPayload = [=, &clientIdSums] (ConnectionHandle conn, Payload&& data) {
-            clientIdSums[id] += proto::toInt<size_t>(data);
+            clientIdSums[id] += unpack<size_t>(data);
 
             auto ptr = prov.lock();
-            ptr->send(conn, proto::fromInt<size_t>(id + 1));
+            ptr->send(conn, pack<size_t>(id + 1));
         };
 
         providers[id]->onDroppedPayload = [] (ConnectionHandle, Payload&&) {
@@ -145,7 +146,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     std::atomic<size_t> provIdSum(0);
     client.onPayload = [&] (ConnectionHandle, Payload&& data) {
-        provIdSum += proto::toInt<size_t>(data);
+        provIdSum += unpack<size_t>(data);
     };
 
     array<shared_ptr<Connection>, N> connections;
@@ -163,7 +164,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
     // TEST --------------------------------------------------------------------
     cerr << fmtTitle("test") << endl;
 
-    client.broadcast(proto::fromInt<size_t>(1));
+    client.broadcast(pack<size_t>(1));
 
     size_t exp = (N * (N + 1)) / 2;
     while (provIdSum != exp);
