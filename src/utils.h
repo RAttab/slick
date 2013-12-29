@@ -7,13 +7,9 @@
 
 #pragma once
 
-#include <chrono>
-#include <thread>
-#include <atomic>
 #include <string>
 #include <stdexcept>
 #include <cstdlib>
-#include <time.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -46,5 +42,6 @@ inline std::string checkErrnoString(const std::string& msg)
         if (!(pred))                                            \
             throw std::logic_error(checkErrnoString(msg));      \
     } while(false)                                              \
+
 
 } // namespace slick
