@@ -41,7 +41,7 @@ struct Payload
     typedef uint16_t SizeT;
 
     Payload() : bytes_(nullptr) {}
-    Payload(uint8_t* bytes) :  bytes_(bytes + sizeof(SizeT)) {}
+    explicit Payload(uint8_t* bytes) :  bytes_(bytes + sizeof(SizeT)) {}
     ~Payload() { clear(); }
 
     Payload(const Payload& other) { copy(other); }

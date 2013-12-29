@@ -151,7 +151,7 @@ Payload pack(const T& value)
     PackIt last = first + dataSize;
     Pack<T>::pack(value, first, last);
 
-    return Payload (bytes.release());
+    return Payload(bytes.release());
 }
 
 template<typename T>
