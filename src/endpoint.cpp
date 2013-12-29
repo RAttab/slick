@@ -296,6 +296,7 @@ Endpoint::
 send(int fd, Payload&& data)
 {
     if (!isPollThread()) {
+        // \todo Need a way to avoid this copy.
         if (!sends.tryDefer(fd, data))
             dropPayload(fd, std::move(data));
         return;
