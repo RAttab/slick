@@ -32,8 +32,12 @@ template<typename T, size_t N>
 struct IsSizedNumber
 {
     static constexpr bool value =
-        std::is_arithmetic<T>::value && sizeof(T) == N;
+        std::is_integral<T>::value && sizeof(T) == N;
 };
+
+template<size_t N> struct SizedInt;
+template<> struct SizedInt<4> { typedef uint32_t type; };
+template<> struct SizedInt<8> { typedef uint64_t type; };
 
 } // namespace details
 
@@ -62,6 +66,19 @@ T hton(T val, typename std::enable_if< details::IsSizedNumber<T, 8>::value >::ty
     return htobe64(val);
 }
 
+template<typename T>
+T hton(T val, typename std::enable_if< std::is_floating_point<T>::value >::type* = 0)
+{
+    union {
+        T orig;
+        typename details::SizedInt<sizeof(T)>::type raw;
+    } punt;
+
+    punt.orig = val;
+    punt.raw = hton(punt.raw);
+    return punt.orig;
+}
+
 
 
 template<typename T>
@@ -86,6 +103,19 @@ template<typename T>
 T ntoh(T val, typename std::enable_if< details::IsSizedNumber<T, 8>::value >::type* = 0)
 {
     return be64toh(val);
+}
+
+template<typename T>
+T ntoh(T val, typename std::enable_if< std::is_floating_point<T>::value >::type* = 0)
+{
+    union {
+        T orig;
+        typename details::SizedInt<sizeof(T)>::type raw;
+    } punt;
+
+    punt.orig = val;
+    punt.raw = ntoh(punt.raw);
+    return punt.orig;
 }
 
 

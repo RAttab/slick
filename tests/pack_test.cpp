@@ -20,6 +20,11 @@ using namespace std;
 using namespace slick;
 using namespace lockless;
 
+
+/******************************************************************************/
+/* INTS                                                                       */
+/******************************************************************************/
+
 template<typename Int>
 void testInt()
 {
@@ -43,6 +48,11 @@ BOOST_AUTO_TEST_CASE(ints)
     testInt< int64_t>();
 }
 
+
+/******************************************************************************/
+/* FLOATS                                                                     */
+/******************************************************************************/
+
 template<typename T>
 void testFloat()
 {
@@ -57,6 +67,11 @@ BOOST_AUTO_TEST_CASE(floats)
     testFloat<double>();
 }
 
+
+/******************************************************************************/
+/* STRINGS                                                                    */
+/******************************************************************************/
+
 BOOST_AUTO_TEST_CASE(strings)
 {
     {
@@ -70,4 +85,11 @@ BOOST_AUTO_TEST_CASE(strings)
         std::string result = unpack<std::string>(pack("bleh"));
         BOOST_CHECK_EQUAL("bleh", result);
     }
+
+    {
+        const char* value = "blooh";
+        std::string result = unpack<std::string>(pack(value));
+        BOOST_CHECK_EQUAL("blooh", result);
+    }
+
 }
