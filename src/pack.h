@@ -269,7 +269,7 @@ struct Pack< std::vector<T> >
         PackIt it = first + sizeof(Payload::SizeT);
         for (const auto& item : value) {
             size_t size = Pack<T>::size(item);
-            assert(it + size < last);
+            assert(it + size <= last);
 
             Pack<T>::pack(item, it, last);
             it += size;
@@ -278,17 +278,17 @@ struct Pack< std::vector<T> >
 
     static std::vector<T> unpack(ConstPackIt first, ConstPackIt last)
     {
-        size_t size = *reinterpret_cast<Payload::SizeT*>(first);
+        size_t size = *reinterpret_cast<const Payload::SizeT*>(first);
 
         std::vector<T> value;
         value.reserve(size);
 
-        PackIt it = first + sizeof(Payload::SizeT);
+        ConstPackIt it = first + sizeof(Payload::SizeT);
         for (size_t i = 0; i < size; ++i) {
             T item = Pack<T>::unpack(it, last);
 
             it += Pack<T>::size(item);
-            assert(it < last);
+            assert(it <= last);
 
             value.emplace_back(std::move(item));
         }

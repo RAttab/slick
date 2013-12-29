@@ -91,5 +91,30 @@ BOOST_AUTO_TEST_CASE(strings)
         std::string result = unpack<std::string>(pack(value));
         BOOST_CHECK_EQUAL("blooh", result);
     }
+}
 
+
+/******************************************************************************/
+/* VECTOR                                                                     */
+/******************************************************************************/
+
+template<typename T>
+void check(const std::vector<T>& value)
+{
+    auto result = unpack< std::vector<T> >(pack(value));
+    BOOST_CHECK_EQUAL(value.size(), result.size());
+
+    bool eq = std::equal(value.begin(), value.end(), result.begin());
+    BOOST_CHECK(eq);
+}
+
+BOOST_AUTO_TEST_CASE(vectors)
+{
+    check(std::vector<size_t>{ 1, 2, 20, 1ULL << 52 });
+    check(std::vector<std::string>{ "weeeeee", "woooooo", "a", "blehohasd" });
+
+    check(std::vector< std::vector<std::string> >{
+                { "blah", "bleeh", "blooooh" },
+                { "wee", "wheee", "whoooooo", "whoooooosh" }
+            });
 }
