@@ -168,13 +168,9 @@ struct Pack<std::string>
 
     static std::string unpack(ConstPackIt first, ConstPackIt last)
     {
-        assert(std::find(first, last, '\0') != last);
-
-        std::string value(reinterpret_cast<const char*>(first), last - first);
-
-        assert(*(first + value.size()) == '\0');
-
-        return std::move(value);
+        auto it = std::find(first, last, '\0');
+        assert(it != last);
+        return std::string(reinterpret_cast<const char*>(first), it - first);
     }
 };
 
