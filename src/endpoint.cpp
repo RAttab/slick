@@ -239,10 +239,7 @@ pushToSendQueue(Endpoint::ConnectionState& conn, Payload&& data, size_t offset)
     if (conn.sendQueue.size() < MaxQueueSize)
         conn.sendQueue.emplace_back(std::forward<Payload>(data), offset);
 
-    else {
-        dropPayload(conn.socket.fd(), std::forward<Payload>(data));
-        stats.sendQueueFull++;
-    }
+    else dropPayload(conn.socket.fd(), std::forward<Payload>(data));
 }
 
 template<typename Payload>
@@ -278,7 +275,6 @@ sendTo(Endpoint::ConnectionState& conn, Payload&& data, size_t offset)
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn.writable = false;
-            stats.writableOff++;
 
             size_t pos = data.packetSize() - size;
             pushToSendQueue(conn, std::forward<Payload>(data), pos);
@@ -306,7 +302,6 @@ send(int fd, Payload&& data)
 
     if (it == connections.end()) {
         dropPayload(fd, std::move(data));
-        stats.sendToUnknown++;
         return;
     }
 
@@ -347,7 +342,6 @@ flushQueue(int fd)
 
     auto& conn = it->second;
     conn.writable = true;
-    stats.writableOn++;
 
     auto queue = std::move(conn.sendQueue);
 

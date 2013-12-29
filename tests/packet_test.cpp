@@ -123,8 +123,6 @@ void runClient(vector<string> uris)
 
     double start = wall();
     size_t oldSent = 0, oldRecv = 0;
-    size_t oldQueue = 0, oldSendTo = 0, oldDeferPl = 0;
-    size_t oldWriteOn = 0, oldWriteOff = 0;
 
     while (true) {
         lockless::sleep(200);
@@ -133,22 +131,9 @@ void runClient(vector<string> uris)
         string diffRecv = getStats(recv, oldRecv);
         string elapsed = fmtElapsed(wall() - start);
 
-        string diffQueue = getStats(client.stats.sendQueueFull, oldQueue);
-        string diffSendTo = getStats(client.stats.sendToUnknown, oldSendTo);
-        string diffDeferPl = getStats(client.stats.deferPayload, oldDeferPl);
-
-        string diffWriteOn = getStats(client.stats.writableOn, oldWriteOn);
-        string diffWriteOff = getStats(client.stats.writableOff, oldWriteOff);
-
         fprintf(stderr,
-                "\r%s> sent: %s, recv: %s, "
-                // "queue: %s, sendTo: %s, deferPl: %s "
-                "wOn: %s, wOff: %s",
-                elapsed.c_str(), diffSent.c_str(), diffRecv.c_str(),
-                // diffQueue.c_str(), diffSendTo.c_str(), diffDeferPl.c_str(),
-                // diffWriteOn.c_str(), diffWriteOff.c_str(),
-                fmtValue(client.stats.writableOn).c_str(),
-                fmtValue(client.stats.writableOff).c_str());
+                "\r%s> sent: %s, recv: %s",
+                elapsed.c_str(), diffSent.c_str(), diffRecv.c_str());
     }
 }
 

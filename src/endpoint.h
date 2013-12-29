@@ -64,22 +64,6 @@ struct Endpoint
     // \todo Would be nice to have multicast support.
 
 
-    struct Stats
-    {
-        Stats() :
-            sendQueueFull(0), sendToUnknown(0), deferPayload(0),
-            writableOn(0), writableOff(0)
-        {}
-
-        size_t sendQueueFull;
-        size_t sendToUnknown;
-        size_t deferPayload;
-
-        size_t writableOn;
-        size_t writableOff;
-    } stats;
-
-
 protected:
 
     void connect(Socket&& socket);
