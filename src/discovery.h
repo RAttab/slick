@@ -98,17 +98,9 @@ private:
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
 
-    SourcePoller poller;
-    PassiveEndpoint endpoint;
-    Timer timer;
-
-    IsPollThread isPollThread;
-
     NodeList nodes;
-    std::unordered_map<std::string, NodeList> keyCache;
-
-    typedef std::vector<WatchFn> WatchList;
-    std::unordered_map<std::string, WatchList> watches;
+    std::unordered_map<std::string, NodeList> keys;
+    std::unordered_map<std::string, std::vector<WatchFn> > watches;
     std::unordered_map<std::string, Payload> data;
 
     struct ConnectionState
@@ -119,16 +111,22 @@ private:
 
         size_t version;
         double connectionTime;
+        std::vector<std::string> queries;
     };
+
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
 
+
+    SourcePoller poller;
+    IsPollThread isPollThread;
+    PassiveEndpoint endpoint;
+    Timer timer;
+    NodeList::RNG rng;
 
     enum { QueueSize = 1 << 4 };
     Defer<QueueSize, std::string> retracts;
     Defer<QueueSize, std::string, Payload> publishes;
     Defer<QueueSize, std::string, WatchFn> discovers;
-
-    NodeList::RNG rng;
 };
 
 } // slick
