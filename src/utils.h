@@ -44,4 +44,21 @@ inline std::string checkErrnoString(const std::string& msg)
     } while(false)                                              \
 
 
+
+/******************************************************************************/
+/* SEQ                                                                        */
+/******************************************************************************/
+
+template<size_t...> struct Seq {};
+
+template<size_t N, size_t... S>
+struct GenSeq : public GenSeq<N-1, N-1, S...> {};
+
+template<size_t... S>
+struct GenSeq<0, S...>
+{
+    typedef Seq<S...> type;
+};
+
+
 } // namespace slick

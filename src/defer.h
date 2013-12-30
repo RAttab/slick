@@ -8,6 +8,7 @@
 #pragma once
 
 #include "queue.h"
+#include "utils.h"
 
 #include <tuple>
 #include <functional>
@@ -21,17 +22,6 @@ namespace slick {
 /******************************************************************************/
 
 namespace details {
-
-template<size_t...> struct Seq {};
-
-template<size_t N, size_t... S>
-struct GenSeq : public GenSeq<N-1, N-1, S...> {};
-
-template<size_t... S>
-struct GenSeq<0, S...>
-{
-    typedef Seq<S...> type;
-};
 
 template<typename Fn, typename... Args, size_t... S>
 void invoke(const Fn& fn, std::tuple<Args...>& tuple, Seq<S...>)
