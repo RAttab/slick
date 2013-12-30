@@ -39,10 +39,14 @@ namespace slick {
 struct Payload
 {
     typedef uint16_t SizeT;
+    typedef uint8_t* iterator;
+    typedef const uint8_t* const_iterator;
+
 
     Payload() : bytes_(nullptr) {}
-    explicit Payload(uint8_t* bytes) :  bytes_(bytes + sizeof(SizeT)) {}
-    ~Payload() { clear(); }
+    explicit Payload(size_t size);
+    static Payload read(const uint8_t* buffer, size_t bufferSize);
+
 
     Payload(const Payload& other) { copy(other); }
     Payload& operator= (const Payload& other)
@@ -63,15 +67,21 @@ struct Payload
         return *this;
     }
 
-
-    static Payload read(const uint8_t* buffer, size_t bufferSize);
-
+    ~Payload() { clear(); }
     void clear()
     {
         if (!bytes_) return;
         delete[] start();
         bytes_ = nullptr;
     }
+
+
+    iterator begin() { return bytes_; }
+    const_iterator cbegin() const { return bytes_; }
+
+    iterator end() { return bytes_ + size(); }
+    const_iterator cend() const { return bytes_ + size(); }
+
 
     const uint8_t* bytes() const { return bytes_; }
     size_t size() const { return *reinterpret_cast<const SizeT*>(start()); }

@@ -129,8 +129,8 @@ T ntoh(T val, typename std::enable_if< std::is_floating_point<T>::value >::type*
 
 template<typename T, typename Enable = void> struct Pack;
 
-typedef uint8_t* PackIt;
-typedef const uint8_t* ConstPackIt;
+typedef Payload::iterator PackIt;
+typedef Payload::const_iterator ConstPackIt;
 
 
 template<typename T>
@@ -139,35 +139,47 @@ size_t packedSize(const T& value)
     return Pack<T>::size(value);
 }
 
+
+template<typename T>
+PackIt pack(const T& value, PackIt first, PackIt last)
+{
+    Pack<T>::pack(value, first, last);
+    return first + packedSize(value);
+}
+
 template<typename T>
 Payload pack(const T& value)
 {
-    size_t dataSize = Pack<T>::size(value);
-    size_t totalSize = dataSize + sizeof(Payload::SizeT);
-    std::unique_ptr<uint8_t[]> bytes(new uint8_t[totalSize]);
+    Payload data(Pack<T>::size(value));
+    pack(value, data.begin(), data.end());
+    return std::move(data);
+}
 
-    *reinterpret_cast<Payload::SizeT*>(bytes.get()) = dataSize;
 
-    PackIt first = bytes.get() + sizeof(Payload::SizeT);
-    PackIt last = first + dataSize;
-    Pack<T>::pack(value, first, last);
-
-    return Payload(bytes.release());
+template<typename T>
+T unpack(ConstPackIt first, ConstPackIt last)
+{
+    return Pack<T>::unpack(first, last);
 }
 
 template<typename T>
 T unpack(const Payload& data)
 {
-    ConstPackIt first = data.bytes();
-    ConstPackIt last = first + data.size();
+    return unpack<T>(data.cbegin(), data.cend());
+}
 
-    return Pack<T>::unpack(first, last);
+
+template<typename T>
+ConstPackIt unpack(T& value, ConstPackIt first, ConstPackIt last)
+{
+    value = Pack<T>::unpack(first, last);
+    return first + packedSize(value);
 }
 
 template<typename T>
 void unpack(T& value, const Payload& data)
 {
-    value = unpack<T>(data);
+    unpack(value, data.cbegin(), data.cend());
 }
 
 
@@ -180,7 +192,7 @@ size_t packedSizeAll() { return 0; }
 template<typename Arg, typename... Rest>
 size_t packedSizeAll(const Arg& arg, const Rest&... rest)
 {
-    return Pack<Arg>::size(arg) + packedSizeAll(rest...);
+    return packedSize(arg) + packedSizeAll(rest...);
 }
 
 
@@ -189,8 +201,8 @@ PackIt packAll(PackIt first, PackIt) { return first; }
 template<typename Arg, typename... Rest>
 PackIt packAll(PackIt first, PackIt last, const Arg& arg, const Rest&... rest)
 {
-    Pack<Arg>::pack(arg, first, last);
-    return packAll(first + packedSize(arg), last, rest...);
+    auto it = pack(arg, first, last);
+    return packAll(it, last, rest...);
 }
 
 
@@ -199,8 +211,8 @@ ConstPackIt unpackAll(ConstPackIt first, ConstPackIt) { return first; }
 template<typename Arg, typename... Rest>
 ConstPackIt unpackAll(ConstPackIt first, ConstPackIt last, Arg& arg, Rest&... rest)
 {
-    arg = Pack<Arg>::unpack(first, last);
-    return unpackAll(first + packedSize(arg), last, rest...);
+    auto it = unpack(arg, first, last);
+    return unpackAll(it, last, rest...);
 }
 
 
@@ -215,7 +227,7 @@ struct Pack<T, typename std::enable_if< std::is_arithmetic<T>::value >::type>
 
     static void pack(T value, PackIt first, PackIt last)
     {
-        assert(size_t(last - first) >= size(value));
+        assert(size_t(last - first) >= sizeof(T));
         *reinterpret_cast<T*>(first) = hton(value);
     }
 
@@ -383,7 +395,7 @@ struct Pack< std::vector<T> >
         // the for-each loop; might need to switch to a plain old for i loop.
 
         size_t size = sizeof(Payload::SizeT);
-        for (const auto& item: value) size += Pack<T>::size(item);
+        for (const auto& item: value) size += packedSize(item);
         return size;
     }
 
@@ -393,11 +405,8 @@ struct Pack< std::vector<T> >
 
         PackIt it = first + sizeof(Payload::SizeT);
         for (const auto& item : value) {
-            size_t size = Pack<T>::size(item);
-            assert(it + size <= last);
-
-            Pack<T>::pack(item, it, last);
-            it += size;
+            it = slick::pack(item, it, last);
+            assert(it <= last);
         }
     }
 
@@ -410,9 +419,8 @@ struct Pack< std::vector<T> >
 
         ConstPackIt it = first + sizeof(Payload::SizeT);
         for (size_t i = 0; i < size; ++i) {
-            T item = Pack<T>::unpack(it, last);
-
-            it += Pack<T>::size(item);
+            T item;
+            it = slick::unpack(item, it, last);
             assert(it <= last);
 
             value.emplace_back(std::move(item));

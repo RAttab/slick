@@ -195,3 +195,28 @@ BOOST_AUTO_TEST_CASE(customs)
     Foo result = unpack<Foo>(pack(value));
     BOOST_CHECK(value == result);
 }
+
+
+/******************************************************************************/
+/* INCREMENTAL                                                                */
+/******************************************************************************/
+
+template<typename T>
+ConstPackIt check(const T& value, ConstPackIt first, ConstPackIt last)
+{
+    T result;
+    auto it = unpack(result, first, last);
+    BOOST_CHECK_EQUAL(value, result);
+    return it;
+}
+
+BOOST_AUTO_TEST_CASE(incremental)
+{
+    auto value = std::make_tuple<size_t, double, std::string>(1, 1.0, "bleh");
+    Payload pl = pack(value);
+
+    auto it = pl.cbegin(), last = pl.cend();
+    it = check(std::get<0>(value), it, last);
+    it = check(std::get<1>(value), it, last);
+    it = check(std::get<2>(value), it, last);
+}

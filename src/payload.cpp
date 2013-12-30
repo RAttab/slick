@@ -8,12 +8,27 @@
 #include "payload.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace slick {
 
 /******************************************************************************/
 /* PAYLOAD                                                                    */
 /******************************************************************************/
+
+Payload::
+Payload(size_t size)
+{
+    assert(size < std::numeric_limits<SizeT>::max());
+
+    size_t totalSize = size + sizeof(SizeT);
+
+    uint8_t* bytes = new uint8_t[totalSize];
+    bytes_ = bytes + sizeof(SizeT);
+
+    *reinterpret_cast<SizeT*>(bytes) = size;
+}
+
 
 Payload
 Payload::
@@ -22,15 +37,11 @@ read(const uint8_t* buffer, size_t bufferSize)
     auto size = *reinterpret_cast<const SizeT*>(buffer);
     if (size + sizeof(SizeT) > bufferSize) return Payload();
 
-    size_t totalSize = size + sizeof(SizeT);
-    std::unique_ptr<uint8_t[]> bytes(new uint8_t[totalSize]);
-
-    *reinterpret_cast<SizeT*>(bytes.get()) = size;
-
+    Payload data(size);
     const uint8_t* first = buffer + sizeof(SizeT);
-    std::copy(first, first + size, bytes.get() + sizeof(SizeT));
 
-    return Payload(bytes.release());
+    std::copy(first, first + size, data.begin());
+    return std::move(data);
 }
 
 void
