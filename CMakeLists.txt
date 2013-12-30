@@ -105,6 +105,7 @@ add_library(
     src/payload.cpp
     src/socket.cpp
     src/endpoint.cpp
+    src/discovery.cpp
     src/client.cpp
     src/provider.cpp)
 

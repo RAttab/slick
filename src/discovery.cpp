@@ -6,9 +6,11 @@
 */
 
 #include "discovery.h"
+#include "pack.h"
 
-#include <algorithm>
+#include <set>
 #include <vector>
+#include <algorithm>
 #include <functional>
 
 namespace slick {
@@ -22,8 +24,8 @@ bool
 NodeList::
 test(const Address& addr) const
 {
-    auto it = std::binary_search(nodes.begin(), nodes.end(), addr);
-    return it != nodes.end();
+    auto res = std::equal_range(nodes.begin(), nodes.end(), addr);
+    return res.first != res.second;
 }
 
 Address
@@ -50,6 +52,29 @@ pickRandom(RNG& rng, size_t count) const
 
 
 /******************************************************************************/
+/* PROTOCOL                                                                   */
+/******************************************************************************/
+
+namespace {
+
+static constexpr size_t ProtocolVersion = 1;
+
+namespace msg {
+
+std::tuple<std::string, size_t>
+handshake()
+{
+    return std::make_tuple(std::string("_disc_"), ProtocolVersion);
+}
+
+typedef decltype(handshake()) HandshakeT;
+
+
+} // namespace msg
+} // namespace anonymous
+
+
+/******************************************************************************/
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
@@ -60,9 +85,9 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
 {
     using namespace std::placeholders;
 
-    endpoint.onPayload = bind(&DistributedDiscovery::onMessage, this, _1, _2);
-    endpoint.onConnect = bind(&DistributedDiscovery::onConnect, this, _1);
-    endpoint.onDisconnect = bind(&DistributedDiscovery::onDisconnect, this, _1);
+    endpoint.onPayload = bind(&DistributedDiscovery::onPayload, this, _1, _2);
+    endpoint.onNewConnection = bind(&DistributedDiscovery::onConnect, this, _1);
+    endpoint.onLostConnection = bind(&DistributedDiscovery::onDisconnect, this, _1);
     poller.add(endpoint);
 
     retracts.onOperation = std::bind(&DistributedDiscovery::retract, this, _1);
@@ -71,11 +96,14 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     publishes.onOperation = std::bind(&DistributedDiscovery::publish, this, _1, _2);
     poller.add(publishes);
 
-    discover.onOperation = std::bind(&DistributedDiscovery::discover, this, _1, _2);
-    poller.add(discover);
+    discovers.onOperation = std::bind(&DistributedDiscovery::discover, this, _1, _2);
+    poller.add(discovers);
 
-    timer.onTimer = bind(&DistributedDiscovery::onTimer, this);
+    timer.onTimer = bind(&DistributedDiscovery::onTimer, this, _1);
     poller.add(timer);
+
+    for (auto& addr : seed)
+        nodes.add(std::move(addr));
 }
 
 void
@@ -91,7 +119,9 @@ DistributedDiscovery::
 shutdown()
 {
     isPollThread.unset();
-    opeations.poll(); // flush pending ops.
+    retracts.poll();
+    publishes.poll();
+    discovers.poll();
 }
 
 void
@@ -129,23 +159,32 @@ retract(const std::string& key)
 
 void
 DistributedDiscovery::
-onPayload(ConnectionHandle handle, Payload&& data)
+onTimer(size_t)
 {
 
+}
+
+
+void
+DistributedDiscovery::
+onPayload(ConnectionHandle handle, Payload&& data)
+{
+    (void) handle;
+    (void) data;
 }
 
 void
 DistributedDiscovery::
 onConnect(ConnectionHandle handle)
 {
-
+    endpoint.send(handle, pack(msg::handshake()));
 }
 
 void
 DistributedDiscovery::
 onDisconnect(ConnectionHandle handle)
 {
-
+    connections.erase(handle);
 }
 
 

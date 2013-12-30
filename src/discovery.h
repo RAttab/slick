@@ -10,6 +10,8 @@
 #include "endpoint.h"
 #include "poll.h"
 #include "defer.h"
+#include "timer.h"
+#include "lockless/tm.h"
 
 #include <string>
 #include <functional>
@@ -91,32 +93,35 @@ struct DistributedDiscovery : public Discovery
 
 private:
 
-    void onTimer();
+    void onTimer(size_t);
     void onPayload(ConnectionHandle handle, Payload&& data);
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
-    void onOperation(Operation&& op);
 
     SourcePoller poller;
-    Timer timer;
     PassiveEndpoint endpoint;
+    Timer timer;
 
     IsPollThread isPollThread;
 
     NodeList nodes;
-
-    struct ConnectionState
-    {
-        ConnectionState() : version(-1) {}
-        int version;
-    };
-    std::unordered_map<ConnectionHandle, ConnectionState> connections;
-
     std::unordered_map<std::string, NodeList> keyCache;
 
     typedef std::vector<WatchFn> WatchList;
     std::unordered_map<std::string, WatchList> watches;
     std::unordered_map<std::string, Payload> data;
+
+    struct ConnectionState
+    {
+        ConnectionState() :
+            version(0), connectionTime(lockless::wall())
+        {}
+
+        size_t version;
+        double connectionTime;
+    };
+    std::unordered_map<ConnectionHandle, ConnectionState> connections;
+
 
     enum { QueueSize = 1 << 4 };
     Defer<QueueSize, std::string> retracts;
