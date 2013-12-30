@@ -11,6 +11,7 @@
 #pragma once
 
 #include "payload.h"
+#include "utils.h"
 
 #include <memory>
 #include <vector>
@@ -288,6 +289,82 @@ struct Pack<T, typename std::enable_if< details::IsCharPtr<T>::value >::type>
     static void pack(const char* value, PackIt first, PackIt last)
     {
         std::strncpy(reinterpret_cast<char*>(first), value, last - first);
+    }
+};
+
+
+/******************************************************************************/
+/* PAIR                                                                       */
+/******************************************************************************/
+
+template<typename T1, typename T2>
+struct Pack< std::pair<T1, T2> >
+{
+    typedef std::pair<T1, T2> PairT;
+
+    static size_t size(const PairT& value)
+    {
+        return packedSizeAll(value.first, value.second);
+    }
+
+    static void pack(const PairT& value, PackIt first, PackIt last)
+    {
+        packAll(first, last, value.first, value.second);
+    }
+
+    static PairT unpack(ConstPackIt first, ConstPackIt last)
+    {
+        PairT value;
+        unpackAll(first, last, value.first, value.second);
+        return std::move(value);
+    }
+};
+
+
+/******************************************************************************/
+/* TUPLE                                                                      */
+/******************************************************************************/
+
+template<typename... Args>
+struct Pack< std::tuple<Args...> >
+{
+    typedef std::tuple<Args...> TupleT;
+
+    template<size_t... S>
+    static size_t size(const TupleT& value, Seq<S...>)
+    {
+        return packedSizeAll(std::get<S>(value)...);
+    }
+
+    static size_t size(const TupleT& value)
+    {
+        return size(value, typename GenSeq<sizeof...(Args)>::type());
+    }
+
+
+    template<size_t... S>
+    static void pack(const TupleT& value, PackIt first, PackIt last, Seq<S...>)
+    {
+        packAll(first, last, std::get<S>(value)...);
+    }
+
+    static void pack(const TupleT& value, PackIt first, PackIt last)
+    {
+        pack(value, first, last, typename GenSeq<sizeof...(Args)>::type());
+    }
+
+
+    template<size_t... S>
+    static void unpack(TupleT& value, ConstPackIt first, ConstPackIt last, Seq<S...>)
+    {
+        unpackAll(first, last, std::get<S>(value)...);
+    }
+
+    static TupleT unpack(ConstPackIt first, ConstPackIt last)
+    {
+        TupleT value;
+        unpack(value, first, last, typename GenSeq<sizeof...(Args)>::type());
+        return std::move(value);
     }
 };
 

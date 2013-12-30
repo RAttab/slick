@@ -46,6 +46,12 @@ BOOST_AUTO_TEST_CASE(ints)
     testInt< int32_t>();
     testInt<uint64_t>();
     testInt< int64_t>();
+
+    {
+        int value = -10;
+        int result = unpack<int>(pack(value));
+        BOOST_CHECK_EQUAL(value, result);
+    }
 }
 
 
@@ -91,6 +97,25 @@ BOOST_AUTO_TEST_CASE(strings)
         std::string result = unpack<std::string>(pack(value));
         BOOST_CHECK_EQUAL("blooh", result);
     }
+}
+
+
+/******************************************************************************/
+/* TUPLE                                                                      */
+/******************************************************************************/
+
+template<typename T>
+void checkTuple(const T& value)
+{
+    auto result = unpack<T>(pack(value));
+    BOOST_CHECK(value == result);
+}
+
+BOOST_AUTO_TEST_CASE(tuples)
+{
+    checkTuple(std::make_pair(std::string("blah"), 1.0));
+    checkTuple(std::make_tuple(size_t(1), std::string("blah"), 1.0));
+    checkTuple(std::make_tuple(std::string("blaeeeh"), std::make_pair(1, 2)));
 }
 
 
