@@ -123,8 +123,9 @@ T ntoh(T val, typename std::enable_if< std::is_floating_point<T>::value >::type*
 }
 
 
+
 /******************************************************************************/
-/* PACK                                                                       */
+/* TYPEDEFS                                                                   */
 /******************************************************************************/
 
 template<typename T, typename Enable = void> struct Pack;
@@ -133,12 +134,28 @@ typedef Payload::iterator PackIt;
 typedef Payload::const_iterator ConstPackIt;
 
 
+/******************************************************************************/
+/* PACKED SIZE                                                                */
+/******************************************************************************/
+
 template<typename T>
 size_t packedSize(const T& value)
 {
     return Pack<T>::size(value);
 }
 
+size_t packedSizeAll() { return 0; }
+
+template<typename Arg, typename... Rest>
+size_t packedSizeAll(const Arg& arg, const Rest&... rest)
+{
+    return packedSize(arg) + packedSizeAll(rest...);
+}
+
+
+/******************************************************************************/
+/* PACK                                                                       */
+/******************************************************************************/
 
 template<typename T>
 PackIt pack(const T& value, PackIt first, PackIt last)
@@ -150,11 +167,33 @@ PackIt pack(const T& value, PackIt first, PackIt last)
 template<typename T>
 Payload pack(const T& value)
 {
-    Payload data(Pack<T>::size(value));
+    Payload data(packedSize(value));
     pack(value, data.begin(), data.end());
     return std::move(data);
 }
 
+
+PackIt packAll(PackIt first, PackIt) { return first; }
+
+template<typename Arg, typename... Rest>
+PackIt packAll(PackIt first, PackIt last, const Arg& arg, const Rest&... rest)
+{
+    auto it = pack(arg, first, last);
+    return packAll(it, last, rest...);
+}
+
+template<typename... Args>
+Payload packAll(const Args&... args)
+{
+    Payload value(packedSizeAll(args...));
+    packAll(value.begin(), value.end(), args...);
+    return std::move(value);
+}
+
+
+/******************************************************************************/
+/* UNPACK                                                                     */
+/******************************************************************************/
 
 template<typename T>
 T unpack(ConstPackIt first, ConstPackIt last)
@@ -168,41 +207,17 @@ T unpack(const Payload& data)
     return unpack<T>(data.cbegin(), data.cend());
 }
 
+template<typename T>
+void unpack(const Payload& data, T& value)
+{
+    unpack(value, data.cbegin(), data.cend());
+}
 
 template<typename T>
 ConstPackIt unpack(T& value, ConstPackIt first, ConstPackIt last)
 {
     value = Pack<T>::unpack(first, last);
     return first + packedSize(value);
-}
-
-template<typename T>
-void unpack(T& value, const Payload& data)
-{
-    unpack(value, data.cbegin(), data.cend());
-}
-
-
-/******************************************************************************/
-/* UTILS                                                                      */
-/******************************************************************************/
-
-size_t packedSizeAll() { return 0; }
-
-template<typename Arg, typename... Rest>
-size_t packedSizeAll(const Arg& arg, const Rest&... rest)
-{
-    return packedSize(arg) + packedSizeAll(rest...);
-}
-
-
-PackIt packAll(PackIt first, PackIt) { return first; }
-
-template<typename Arg, typename... Rest>
-PackIt packAll(PackIt first, PackIt last, const Arg& arg, const Rest&... rest)
-{
-    auto it = pack(arg, first, last);
-    return packAll(it, last, rest...);
 }
 
 
@@ -213,6 +228,12 @@ ConstPackIt unpackAll(ConstPackIt first, ConstPackIt last, Arg& arg, Rest&... re
 {
     auto it = unpack(arg, first, last);
     return unpackAll(it, last, rest...);
+}
+
+template<typename... Args>
+void unpackAll(const Payload& value, Args&... args)
+{
+    unpackAll(value.cbegin(), value.cend(), args...);
 }
 
 
