@@ -117,13 +117,15 @@ poll(int timeoutMs)
 }
 
 
-void
+ConnectionHandle
 Endpoint::
 connect(Socket&& socket)
 {
+    ConnectionHandle handle = socket.fd();
+
     if (!isPollThread()) {
         connects.defer(std::move(socket));
-        return;
+        return handle;
     }
 
     poller.add(socket.fd(), EPOLLET | EPOLLIN | EPOLLOUT);
@@ -135,6 +137,7 @@ connect(Socket&& socket)
     connections[connection.socket.fd()] = std::move(connection);
 
     if (onNewConnection) onNewConnection(fd);
+    return handle;
 }
 
 

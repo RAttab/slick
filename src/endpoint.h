@@ -63,11 +63,10 @@ struct Endpoint
 
     // \todo Would be nice to have multicast support.
 
+    ConnectionHandle connect(Socket&& socket);
+    void disconnect(ConnectionHandle handle);
 
 protected:
-
-    void connect(Socket&& socket);
-    void disconnect(int fd);
 
     virtual void onPollEvent(struct epoll_event&)
     {
