@@ -164,12 +164,13 @@ insert(T value)
 template<typename T>
 bool
 DistributedDiscovery::List<T>::
-erase(const T& value) const
+erase(const T& value)
 {
     auto res = std::equal_range(list.begin(), list.end(), value);
     if (res.first == res.second) return false;
 
-    list.erase(res.first, res.second);
+    list.erase(res.first);
+    return true;
 }
 
 
@@ -416,7 +417,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         items.emplace_back(endpoint.interfaces(), nodeTTL_);
 
         double now = lockless::wall();
-        size_t picks = lockless::clz(nodes.size());
+        size_t picks = lockless::log2(nodes.size());
 
         for (const auto& node : nodes.pickRandom(rng, picks))
             items.emplace_back(node.addrs, node.ttl(now));
@@ -598,7 +599,64 @@ void
 DistributedDiscovery::
 onTimer(size_t)
 {
+    expireNodes(nodes);
+    expireKeys();
+    rotateConnections();
+}
 
+void
+DistributedDiscovery::
+expireNodes(List<Node>& list)
+{
+    while (!list.empty()) {
+        const auto& node = list.pickRandom(rng);
+        if (node.ttl()) return;
+        list.erase(node);
+    }
+}
+
+void
+DistributedDiscovery::
+expireKeys()
+{
+    std::vector<std::string> toRemove;
+
+    for (auto& key : keys) {
+        auto& list = key.second;
+
+        expireNodes(list);
+        if (!list.empty()) continue;
+
+        toRemove.emplace_back(key.first);
+    }
+
+    for (const auto& key : toRemove)
+        keys.erase(key);
+}
+
+void
+DistributedDiscovery::
+rotateConnections()
+{
+    size_t targetSize = lockless::log2(nodes.size());
+    size_t disconnects =
+        std::min(lockless::log2(targetSize), connections.size());
+
+    if (connections.size() - disconnects > targetSize)
+        disconnects = connections.size() - targetSize;
+
+    for (size_t i = 0; i < disconnects; ++i) {
+        std::uniform_int_distribution<size_t> dist(0, connections.size() -1);
+
+        auto it = connections.begin();
+        std::advance(it, dist(rng));
+
+        endpoint.disconnect(it->second.handle);
+    }
+
+    size_t connects = targetSize - connections.size();
+    for (const auto& node : nodes.pickRandom(rng, connects))
+        endpoint.connect(node.addrs);
 }
 
 } // slick

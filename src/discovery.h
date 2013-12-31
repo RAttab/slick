@@ -106,6 +106,11 @@ private:
 
     size_t timerPeriod();
 
+    template<typename T> struct List;
+    void expireNodes(List<Node>&);
+    void expireKeys();
+    void rotateConnections();
+
     struct ConnState
     {
         ConnectionHandle handle;
@@ -172,7 +177,7 @@ private:
         iterator find(const T& value);
         bool count(const T& value) const;
         bool insert(T value);
-        bool erase(const T& value) const;
+        bool erase(const T& value);
 
         iterator begin() { return list.begin(); }
         const_iterator cbegin() const { return list.cbegin(); }
@@ -190,8 +195,7 @@ private:
         template<typename Rng>
         std::vector<T> pickRandom(Rng& rng, size_t count) const
         {
-            assert(count < list.size());
-
+            count = std::min(count, list.size());
             std::set<T> result;
 
             for (size_t i = 0; i < count; ++i)
