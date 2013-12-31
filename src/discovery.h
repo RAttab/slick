@@ -80,6 +80,7 @@ private:
 
     struct Watch;
     void discover(const std::string& key, Watch&& watch);
+    ConnectionHandle connect(const std::vector<Address>& addrs);
 
     void onTimer(size_t);
     void onPayload(ConnectionHandle handle, Payload&& data);
@@ -95,6 +96,11 @@ private:
     ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
+    struct Node;
+    void doKeys(const std::vector<std::string>& keys);
+    void doWant(const std::vector<std::string>& keys);
+    void doGet(const std::string& key, const Node& node);
+
     size_t timerPeriod();
 
     struct ConnState
@@ -102,7 +108,7 @@ private:
         ConnectionHandle handle;
         uint32_t version;
         double connectionTime;
-        std::vector<std::string> queries;
+        std::vector<std::string> gets;
 
         ConnState() :
             handle(0), version(0), connectionTime(lockless::wall())
@@ -138,7 +144,7 @@ private:
         WatchHandle handle;
         WatchFn watch;
 
-        Watch() : handle(0) {}
+        Watch(WatchHandle handle = 0) : handle(handle) {}
         Watch(WatchFn watch);
         bool operator< (const Watch& other) const
         {
@@ -149,9 +155,21 @@ private:
     template<typename T>
     struct List
     {
+        typedef std::vector<Node>::iterator iterator;
+        typedef std::vector<Node>::const_iterator const_iterator;
+
+        size_t size() const { return list.size(); }
+        bool empty() const { return list.empty(); }
+
         bool count(const T& value) const;
         bool insert(T value);
         bool erase(const T& value) const;
+
+        iterator begin() { return list.begin(); }
+        const_iterator cbegin() const { return list.cbegin(); }
+
+        iterator end() { return list.end(); }
+        const_iterator cend() const { return list.cend(); }
 
         template<typename Rng>
         const T& pickRandom(Rng& rng) const
@@ -178,12 +196,13 @@ private:
         std::vector<Node> list;
     };
 
+
     size_t keyTTL_;
     size_t nodeTTL_;
 
     List<Node> nodes;
     std::unordered_map<std::string, List<Node> > keys;
-    std::unordered_map<std::string, List<Watch> > watches;
+    std::unordered_map<std::string, std::set<Watch> > watches;
     std::unordered_map<std::string, Payload> data;
     std::unordered_map<ConnectionHandle, ConnState> connections;
 

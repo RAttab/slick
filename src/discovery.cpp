@@ -179,6 +179,8 @@ static constexpr Type Nodes = 3;
 static constexpr Type Get   = 4;
 static constexpr Type Data  = 5;
 
+typedef std::vector<Address> Node;
+
 } // namespace msg
 
 
@@ -251,98 +253,6 @@ shutdown()
 }
 
 
-Discovery::WatchHandle
-DistributedDiscovery::
-discover(const std::string& key, const WatchFn& fn)
-{
-    Watch watch(fn);
-    auto handle = watch.handle;
-    discover(key, std::move(watch));
-    return handle;
-}
-
-
-void
-DistributedDiscovery::
-discover(const std::string& key, Watch&& watch)
-{
-    if (!isPollThread()) {
-        discovers.defer(key, watch);
-        return;
-    }
-
-    return;
-}
-
-void
-DistributedDiscovery::
-forget(const std::string& key, WatchHandle handle)
-{
-    if (!isPollThread()) {
-        forgets.defer(key, handle);
-        return;
-    }
-
-}
-
-
-void
-DistributedDiscovery::
-publish(const std::string& key, Payload&& data)
-{
-    if (!isPollThread()) {
-        publishes.defer(key, std::move(data));
-        return;
-    }
-
-}
-
-void
-DistributedDiscovery::
-retract(const std::string& key)
-{
-    if (!isPollThread()) {
-        retracts.defer(key);
-        return;
-    }
-
-}
-
-void
-DistributedDiscovery::
-onTimer(size_t)
-{
-
-}
-
-
-void
-DistributedDiscovery::
-onConnect(ConnectionHandle handle)
-{
-    auto& conn = connections[handle];
-    conn.handle = handle;
-
-    Payload data;
-    auto head = std::make_tuple(msg::Init, msg::Version);
-
-    if (conn.queries.empty())
-        data = pack(head);
-    else {
-        data = packAll(head, msg::Get, conn.queries);
-        conn.queries.clear();
-    }
-
-    endpoint.send(handle, std::move(data));
-}
-
-void
-DistributedDiscovery::
-onDisconnect(ConnectionHandle handle)
-{
-    connections.erase(handle);
-}
-
 void
 DistributedDiscovery::
 onPayload(ConnectionHandle handle, Payload&& data)
@@ -367,6 +277,107 @@ onPayload(ConnectionHandle handle, Payload&& data)
     }
 }
 
+
+Discovery::WatchHandle
+DistributedDiscovery::
+discover(const std::string& key, const WatchFn& fn)
+{
+    Watch watch(fn);
+    auto handle = watch.handle;
+    discover(key, std::move(watch));
+    return handle;
+}
+
+
+void
+DistributedDiscovery::
+discover(const std::string& key, Watch&& watch)
+{
+    if (!isPollThread()) {
+        discovers.defer(key, watch);
+        return;
+    }
+
+    if (!watches.count(key))
+        doWant({{ key }});
+
+    watches[key].insert(std::move(watch));
+
+    for (const auto& node : keys[key])
+        doGet(key, node);
+
+}
+
+void
+DistributedDiscovery::
+forget(const std::string& key, WatchHandle handle)
+{
+    if (!isPollThread()) {
+        forgets.defer(key, handle);
+        return;
+    }
+
+    auto& list = watches[key];
+    list.erase(Watch(handle));
+
+    if (list.empty())
+        watches.erase(key);
+}
+
+
+void
+DistributedDiscovery::
+publish(const std::string& key, Payload&& data)
+{
+    if (!isPollThread()) {
+        publishes.defer(key, std::move(data));
+        return;
+    }
+
+    this->data[key] = std::move(data);
+    doKeys({key });
+}
+
+void
+DistributedDiscovery::
+retract(const std::string& key)
+{
+    if (!isPollThread()) {
+        retracts.defer(key);
+        return;
+    }
+
+    data.erase(key);
+}
+
+
+void
+DistributedDiscovery::
+onConnect(ConnectionHandle handle)
+{
+    auto& conn = connections[handle];
+    conn.handle = handle;
+
+    Payload data;
+    auto head = std::make_tuple(msg::Init, msg::Version);
+
+    if (conn.gets.empty())
+        data = pack(head);
+    else {
+        data = packAll(head, msg::Get, conn.gets);
+        conn.gets.clear();
+    }
+
+    endpoint.send(handle, std::move(data));
+}
+
+void
+DistributedDiscovery::
+onDisconnect(ConnectionHandle handle)
+{
+    connections.erase(handle);
+}
+
 ConstPackIt
 DistributedDiscovery::
 onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
@@ -380,7 +391,23 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     assert(conn.version == msg::Version);
+
+    // \todo send the KEY, WANT and NODES message
+
     return it;
+}
+
+void
+DistributedDiscovery::
+doKeys(const std::vector<std::string>& keys)
+{
+    typedef std::pair<std::string, msg::Node> Item;
+    std::vector<Item> items;
+
+    for (const std::string& key : keys)
+        items.emplace_back(key, endpoint.interfaces());
+
+    endpoint.broadcast(packAll(msg::Keys, items));
 }
 
 ConstPackIt
@@ -390,6 +417,14 @@ onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
     (void) conn;
     (void) last;
     return it;
+}
+
+
+void
+DistributedDiscovery::
+doWant(const std::vector<std::string>& keys)
+{
+    endpoint.broadcast(packAll(msg::Want, endpoint.interfaces(), keys));
 }
 
 ConstPackIt
@@ -410,6 +445,16 @@ onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
     return it;
 }
 
+void
+DistributedDiscovery::
+doGet(const std::string& key, const Node& node)
+{
+    ConnectionHandle handle = endpoint.connect(node.addrs);
+    if (!handle) return;
+
+    connections[handle].gets.emplace_back(key);
+}
+
 ConstPackIt
 DistributedDiscovery::
 onGet(ConnState& conn, ConstPackIt it, ConstPackIt last)
@@ -426,6 +471,14 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
     (void) conn;
     (void) last;
     return it;
+}
+
+
+void
+DistributedDiscovery::
+onTimer(size_t)
+{
+
 }
 
 
