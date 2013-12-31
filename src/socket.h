@@ -137,6 +137,8 @@ struct PassiveSockets
         return std::find(fds_.begin(), fds_.end(), fd) != fds_.end();
     };
 
+    std::vector<Address> interfaces() const;
+
 private:
     std::vector<int> fds_;
 };

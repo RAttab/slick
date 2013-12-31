@@ -141,6 +141,8 @@ struct PassiveEndpoint : public Endpoint
     PassiveEndpoint(Port port);
     virtual ~PassiveEndpoint();
 
+    std::vector<Address> interfaces() const { return sockets.interfaces(); }
+
 protected:
     virtual void onPollEvent(struct epoll_event& ev);
 
