@@ -57,6 +57,7 @@
 
 #include "discovery.h"
 #include "pack.h"
+#include "lockless/bits.h"
 
 #include <set>
 #include <vector>
@@ -130,6 +131,15 @@ Watch(WatchFn watch) : watch(std::move(watch))
 /******************************************************************************/
 
 template<typename T>
+auto
+DistributedDiscovery::List<T>::
+find(const T& value) -> iterator
+{
+    auto res = std::equal_range(list.begin(), list.end(), value);
+    return res.first == res.second ? list.end() : res.first;
+}
+
+template<typename T>
 bool
 DistributedDiscovery::List<T>::
 count(const T& value) const
@@ -159,7 +169,7 @@ erase(const T& value) const
     auto res = std::equal_range(list.begin(), list.end(), value);
     if (res.first == res.second) return false;
 
-    list.erase(res.first);
+    list.erase(res.first, res.second);
 }
 
 
@@ -178,8 +188,6 @@ static constexpr Type Want  = 2;
 static constexpr Type Nodes = 3;
 static constexpr Type Get   = 4;
 static constexpr Type Data  = 5;
-
-typedef std::vector<Address> Node;
 
 } // namespace msg
 
@@ -288,7 +296,6 @@ discover(const std::string& key, const WatchFn& fn)
     return handle;
 }
 
-
 void
 DistributedDiscovery::
 discover(const std::string& key, Watch&& watch)
@@ -298,14 +305,15 @@ discover(const std::string& key, Watch&& watch)
         return;
     }
 
-    if (!watches.count(key))
-        doWant({{ key }});
+    if (!watches.count(key)) {
+        std::vector<WantItem> items = { key };
+        endpoint.broadcast(packAll(msg::Want, endpoint.interfaces(), items));
+    }
 
     watches[key].insert(std::move(watch));
 
     for (const auto& node : keys[key])
-        doGet(key, node);
-
+        doGet(key, node.addrs);
 }
 
 void
@@ -335,7 +343,11 @@ publish(const std::string& key, Payload&& data)
     }
 
     this->data[key] = std::move(data);
-    doKeys({key });
+
+    std::vector<KeyItem> items;
+    items.emplace_back(key, endpoint.interfaces(), keyTTL_);
+
+    endpoint.broadcast(packAll(msg::Keys, items));
 }
 
 void
@@ -358,17 +370,7 @@ onConnect(ConnectionHandle handle)
     auto& conn = connections[handle];
     conn.handle = handle;
 
-    Payload data;
-    auto head = std::make_tuple(msg::Init, msg::Version);
-
-    if (conn.gets.empty())
-        data = pack(head);
-    else {
-        data = packAll(head, msg::Get, conn.gets);
-        conn.gets.clear();
-    }
-
-    endpoint.send(handle, std::move(data));
+    endpoint.send(handle, packAll(msg::Init, msg::Version));
 }
 
 void
@@ -392,84 +394,202 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     assert(conn.version == msg::Version);
 
+    if (!data.empty()) {
+        std::vector<KeyItem> items;
+        for (const auto& key : data)
+            items.emplace_back(key.first, endpoint.interfaces(), keyTTL_);
+
+        endpoint.send(conn.handle, packAll(msg::Keys, items));
+    }
+
+    if (!watches.empty()) {
+        std::vector<WantItem> items;
+        for (const auto& watch : watches)
+            items.emplace_back(watch.first);
+
+        auto msg = packAll(msg::Want, endpoint.interfaces(), items);
+        endpoint.send(conn.handle, std::move(msg));
+    }
+
+    if (!nodes.empty()) {
+        std::vector<NodeItem> items;
+        items.emplace_back(endpoint.interfaces(), nodeTTL_);
+
+        double now = lockless::wall();
+        size_t picks = lockless::clz(nodes.size());
+
+        for (const auto& node : nodes.pickRandom(rng, picks))
+            items.emplace_back(node.addrs, node.ttl(now));
+
+        endpoint.send(conn.handle, packAll(msg::Nodes, items));
+    }
+
     // \todo send the KEY, WANT and NODES message
 
     return it;
 }
 
-void
-DistributedDiscovery::
-doKeys(const std::vector<std::string>& keys)
-{
-    typedef std::pair<std::string, msg::Node> Item;
-    std::vector<Item> items;
-
-    for (const std::string& key : keys)
-        items.emplace_back(key, endpoint.interfaces());
-
-    endpoint.broadcast(packAll(msg::Keys, items));
-}
-
 ConstPackIt
 DistributedDiscovery::
-onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
+onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
 {
-    (void) conn;
-    (void) last;
+    std::vector<KeyItem> items;
+    it = unpack(items, it, last);
+
+    double now = lockless::wall();
+    std::vector<KeyItem> toForward;
+
+    for (auto& item : items) {
+        std::string key;
+        NodeLocation node;
+        size_t ttl;
+        std::tie(key, node, ttl) = std::move(item);
+
+        auto& list = keys[key];
+
+        Node value(node, ttl, now);
+        auto it = list.find(value);
+        if (it != list.end()) {
+            it->setTTL(ttl, now);
+            continue;
+        }
+
+        list.insert(value);
+        toForward.emplace_back(key, node, ttl);
+
+        if (watches.count(key)) doGet(key, node);
+    }
+
+    if (!toForward.empty())
+        endpoint.broadcast(packAll(msg::Keys, toForward));
+
     return it;
 }
 
-
-void
-DistributedDiscovery::
-doWant(const std::vector<std::string>& keys)
-{
-    endpoint.broadcast(packAll(msg::Want, endpoint.interfaces(), keys));
-}
 
 ConstPackIt
 DistributedDiscovery::
 onWant(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
-    (void) conn;
-    (void) last;
+    NodeLocation node;
+    std::vector<WantItem> items;
+    it = unpackAll(it, last, node, items);
+
+    std::vector<WantItem> toForward;
+
+    for (const auto& key : items) {
+        auto it = keys.find(key);
+
+        if (it != keys.end()) {
+            std::vector<KeyItem> items;
+            for (const auto& node : it->second) {
+                if (!node.ttl()) continue;
+                items.emplace_back(key, node.addrs, node.ttl());
+            }
+
+            endpoint.send(conn.handle, packAll(msg::Keys, items));
+        }
+
+        else {
+            keys[key] = List<Node>();
+            toForward.emplace_back(key);
+        }
+    }
+
+    if (!toForward.empty())
+        endpoint.broadcast(packAll(msg::Want, toForward));
+
     return it;
 }
 
 ConstPackIt
 DistributedDiscovery::
-onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
+onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 {
-    (void) conn;
-    (void) last;
+    std::vector<NodeItem> items;
+    it = unpack(items, it, last);
+
+    double now = lockless::wall();
+    std::vector<NodeItem> toForward;
+
+    for (auto& item : items) {
+        NodeLocation node;
+        size_t ttl;
+        std::tie(node, ttl) = std::move(item);
+
+        Node value(node, ttl, now);
+
+        auto it = nodes.find(value);
+        if (it != nodes.end()) {
+            it->setTTL(ttl, now);
+            continue;
+        }
+
+        nodes.insert(value);
+        toForward.emplace_back(node, ttl);
+    }
+
+    if (!toForward.empty())
+        endpoint.broadcast(packAll(msg::Nodes, toForward));
+
     return it;
 }
 
 void
 DistributedDiscovery::
-doGet(const std::string& key, const Node& node)
+doGet(const std::string& key, const std::vector<Address>& addrs)
 {
-    ConnectionHandle handle = endpoint.connect(node.addrs);
+    ConnectionHandle handle = endpoint.connect(addrs);
     if (!handle) return;
 
-    connections[handle].gets.emplace_back(key);
+    std::vector<std::string> items = { key };
+    endpoint.send(handle, packAll(msg::Get, items));
 }
 
 ConstPackIt
 DistributedDiscovery::
 onGet(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
-    (void) conn;
-    (void) last;
+
+    std::vector<std::string> items;
+    it = unpack(items, it, last);
+
+    std::vector<DataItem> reply;
+    reply.reserve(items.size());
+
+    for (const auto& key : items) {
+        auto it = data.find(key);
+        if (it == data.end()) continue;
+
+        reply.emplace_back(key, it->second);
+    }
+
+    if (!reply.empty())
+        endpoint.send(conn.handle, packAll(msg::Data, reply));
+
     return it;
 }
 
+
 ConstPackIt
 DistributedDiscovery::
-onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
+onData(ConnState&, ConstPackIt it, ConstPackIt last)
 {
-    (void) conn;
-    (void) last;
+    std::vector<DataItem> items;
+    it = unpack(items, it, last);
+
+    for (auto& item : items) {
+        std::string key;
+        Payload payload;
+        std::tie(key, payload) = std::move(item);
+
+        auto it = watches.find(key);
+        if (it == watches.end()) continue;
+
+        for (const auto& watch : it->second)
+            watch.watch(watch.handle, payload);
+    }
+
     return it;
 }
 
@@ -480,6 +600,5 @@ onTimer(size_t)
 {
 
 }
-
 
 } // slick

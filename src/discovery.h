@@ -25,9 +25,8 @@ namespace slick {
 
 struct Discovery
 {
-    enum Event { New, Lost };
-    typedef std::function<void(Event, Payload&&)> WatchFn;
     typedef size_t WatchHandle;
+    typedef std::function<void(WatchHandle, const Payload&)> WatchFn;
 
     virtual void fd() = 0;
     virtual void poll() = 0;
@@ -96,10 +95,14 @@ private:
     ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
+    typedef std::vector<Address> NodeLocation;
+    typedef std::string WantItem;
+    typedef std::tuple<NodeLocation, size_t> NodeItem;
+    typedef std::tuple<std::string, Payload> DataItem;
+    typedef std::tuple<std::string, NodeLocation, size_t> KeyItem;
+
     struct Node;
-    void doKeys(const std::vector<std::string>& keys);
-    void doWant(const std::vector<std::string>& keys);
-    void doGet(const std::string& key, const Node& node);
+    void doGet(const std::string& key, const NodeLocation& node);
 
     size_t timerPeriod();
 
@@ -108,7 +111,6 @@ private:
         ConnectionHandle handle;
         uint32_t version;
         double connectionTime;
-        std::vector<std::string> gets;
 
         ConnState() :
             handle(0), version(0), connectionTime(lockless::wall())
@@ -120,11 +122,11 @@ private:
 
     struct Node
     {
-        std::vector<Address> addrs;
+        NodeLocation addrs;
         double expiration;
 
         Node() : expiration(0) {}
-        Node(std::vector<Address> addrs, size_t ttl, double now = lockless::wall()) :
+        Node(NodeLocation addrs, size_t ttl, double now = lockless::wall()) :
             addrs(std::move(addrs)), expiration(now + ttl)
         {
             std::sort(addrs.begin(), addrs.end());
@@ -134,6 +136,12 @@ private:
         {
             if (expiration <= now) return 0;
             return expiration - now;
+        }
+
+        void setTTL(size_t ttl, double now = lockless::wall())
+        {
+            if (ttl > this->ttl(now))
+            expiration = now + ttl;
         }
 
         bool operator<(const Node& other) const;
@@ -161,6 +169,7 @@ private:
         size_t size() const { return list.size(); }
         bool empty() const { return list.empty(); }
 
+        iterator find(const T& value);
         bool count(const T& value) const;
         bool insert(T value);
         bool erase(const T& value) const;
