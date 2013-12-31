@@ -167,12 +167,22 @@ erase(const T& value) const
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
+size_t
+DistributedDiscovery::
+timerPeriod()
+{
+    enum { BasePeriod = 60 };
+    std::uniform_int_distribution<size_t>dist(BasePeriod, BasePeriod * 2);
+    return dist(rng);
+}
+
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     keyTTL_(DefaultKeyTTL),
     nodeTTL_(DefaultNodeTTL),
+    rng(lockless::wall()),
     endpoint(port),
-    timer(60) // \todo add randomness
+    timer(timerPeriod()) // \todo add randomness
 {
     using namespace std::placeholders;
 

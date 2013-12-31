@@ -86,6 +86,7 @@ private:
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
 
+    size_t timerPeriod();
 
     struct ConnectionState
     {
@@ -165,7 +166,6 @@ private:
         std::vector<Node> list;
     };
 
-
     size_t keyTTL_;
     size_t nodeTTL_;
 
@@ -175,11 +175,12 @@ private:
     std::unordered_map<std::string, Payload> data;
     std::unordered_map<ConnectionHandle, ConnectionState> connections;
 
+    std::mt19937 rng;
+
     SourcePoller poller;
     IsPollThread isPollThread;
     PassiveEndpoint endpoint;
     Timer timer;
-    std::mt19937 rng;
 
 
     enum { QueueSize = 1 << 4 };
