@@ -67,61 +67,74 @@ namespace slick {
 
 
 /******************************************************************************/
-/* NODE LIST                                                                  */
+/* NODE                                                                       */
 /******************************************************************************/
 
 bool
-NodeList::
-test(const Address& addr) const
+DistributedDiscovery::Node::
+operator<(const Node& other) const
 {
-    auto res = std::equal_range(nodes.begin(), nodes.end(), addr);
+    size_t n = std::min(addrs.size(), other.addrs.size());
+    for (size_t i = 0; i < n; ++i) {
+        if (addrs[i] < other.addrs[i]) return true;
+        if (other.addrs[i] < addrs[i]) return false;
+    }
+
+    if (addrs.size() < other.addrs.size()) return true;
+    if (other.addrs.size() < addrs.size()) return false;
+
+    return expiration < other.expiration;
+}
+
+
+/******************************************************************************/
+/* WATCH                                                                      */
+/******************************************************************************/
+
+DistributedDiscovery::Watch::
+Watch(WatchFn watch) : watch(std::move(watch))
+{
+    static std::atomic<WatchHandle> handleCounter{0};
+    handle = ++handleCounter;
+}
+
+
+/******************************************************************************/
+/* LIST                                                                       */
+/******************************************************************************/
+
+template<typename T>
+bool
+DistributedDiscovery::List<T>::
+count(const T& value) const
+{
+    auto res = std::equal_range(list.begin(), list.end(), value);
     return res.first != res.second;
 }
 
-Address
-NodeList::
-pickRandom(RNG& rng) const
+template<typename T>
+bool
+DistributedDiscovery::List<T>::
+insert(T value)
 {
-    std::uniform_int_distribution<size_t> dist(0, nodes.size() - 1);
-    return nodes[dist(rng)];
+    if (count(value)) return false;
+
+    list.emplace_back(std::move(value));
+    std::sort(list.begin(), list.end());
+
+    return true;
 }
 
-std::vector<Address>
-NodeList::
-pickRandom(RNG& rng, size_t count) const
+template<typename T>
+bool
+DistributedDiscovery::List<T>::
+erase(const T& value) const
 {
-    assert(count < nodes.size());
+    auto res = std::equal_range(list.begin(), list.end(), value);
+    if (res.first == res.second) return false;
 
-    std::set<Address> result;
-
-    for (size_t i = 0; i < count; ++i)
-        while (!result.insert(pickRandom(rng)).second);
-
-    return std::vector<Address>(result.begin(), result.end());
+    list.erase(res.first);
 }
-
-
-/******************************************************************************/
-/* PROTOCOL                                                                   */
-/******************************************************************************/
-
-namespace {
-
-static constexpr size_t ProtocolVersion = 1;
-
-namespace msg {
-
-std::tuple<std::string, size_t>
-handshake()
-{
-    return std::make_tuple(std::string("_disc_"), ProtocolVersion);
-}
-
-typedef decltype(handshake()) HandshakeT;
-
-
-} // namespace msg
-} // namespace anonymous
 
 
 /******************************************************************************/
@@ -130,6 +143,8 @@ typedef decltype(handshake()) HandshakeT;
 
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seed, Port port) :
+    keyTTL_(DefaultKeyTTL),
+    nodeTTL_(DefaultNodeTTL),
     endpoint(port),
     timer(60) // \todo add randomness
 {
@@ -146,14 +161,19 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     publishes.onOperation = std::bind(&DistributedDiscovery::publish, this, _1, _2);
     poller.add(publishes);
 
-    discovers.onOperation = std::bind(&DistributedDiscovery::discover, this, _1, _2);
+    typedef void (DistributedDiscovery::*DiscoverFn) (const std::string&, Watch&&);
+    DiscoverFn discoverFn = &DistributedDiscovery::discover;
+    discovers.onOperation = std::bind(discoverFn, this, _1, _2);
     poller.add(discovers);
+
+    forgets.onOperation = std::bind(&DistributedDiscovery::forget, this, _1, _2);
+    poller.add(forgets);
 
     timer.onTimer = bind(&DistributedDiscovery::onTimer, this, _1);
     poller.add(timer);
 
     for (auto& addr : seed)
-        nodes.add(std::move(addr));
+        nodes.insert(Node({ addr }, nodeTTL_));
 }
 
 void
@@ -172,18 +192,44 @@ shutdown()
     retracts.poll();
     publishes.poll();
     discovers.poll();
+    forgets.poll();
 }
+
+
+Discovery::WatchHandle
+DistributedDiscovery::
+discover(const std::string& key, const WatchFn& fn)
+{
+    Watch watch(fn);
+    auto handle = watch.handle;
+    discover(key, std::move(watch));
+    return handle;
+}
+
 
 void
 DistributedDiscovery::
-discover(const std::string& key, const WatchFn& watch)
+discover(const std::string& key, Watch&& watch)
 {
     if (!isPollThread()) {
         discovers.defer(key, watch);
         return;
     }
 
+    return;
 }
+
+void
+DistributedDiscovery::
+forget(const std::string& key, WatchHandle handle)
+{
+    if (!isPollThread()) {
+        forgets.defer(key, handle);
+        return;
+    }
+
+}
+
 
 void
 DistributedDiscovery::
@@ -227,7 +273,7 @@ void
 DistributedDiscovery::
 onConnect(ConnectionHandle handle)
 {
-    endpoint.send(handle, pack(msg::handshake()));
+    (void) handle;
 }
 
 void
