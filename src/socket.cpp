@@ -223,6 +223,14 @@ PassiveSockets::
     for (int fd : fds_) close(fd);
 }
 
+std::vector<Address>
+PassiveSockets::
+interfaces() const
+{
+    assert(false);
+    return {};
+}
+
 
 } // slick
 
