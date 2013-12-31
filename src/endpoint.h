@@ -63,7 +63,10 @@ struct Endpoint
 
     // \todo Would be nice to have multicast support.
 
+
     ConnectionHandle connect(Socket&& socket);
+    ConnectionHandle connect(const std::vector<Address>& addrs);
+
     void disconnect(ConnectionHandle handle);
 
 protected:

@@ -31,7 +31,8 @@ Endpoint()
     broadcasts.onOperation = std::bind((BroadcastFn)&Endpoint::broadcast, this, _1);
     poller.add(broadcasts.fd());
 
-    connects.onOperation = std::bind(&Endpoint::connect, this, _1);
+    typedef ConnectionHandle (Endpoint::*ConnectFn) (Socket&& socket);
+    connects.onOperation = std::bind((ConnectFn)&Endpoint::connect, this, _1);
     poller.add(connects.fd());
 
     disconnects.onOperation = std::bind(&Endpoint::disconnect, this, _1);
@@ -140,6 +141,17 @@ connect(Socket&& socket)
     return handle;
 }
 
+ConnectionHandle
+Endpoint::
+connect(const std::vector<Address>& addrs)
+{
+    for (const auto& addr : addrs) {
+        auto socket = Socket::connect(addr, SOCK_NONBLOCK);
+        if (socket) return connect(std::move(socket));
+    }
+
+    return 0;
+}
 
 void
 Endpoint::
