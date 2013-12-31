@@ -79,6 +79,11 @@ struct Address
 
     const char* chost() const { return host.c_str(); }
 
+    std::string toString() const
+    {
+        return host + ':' + std::to_string(port);
+    }
+
     std::string host;
     Port port;
 };
