@@ -146,6 +146,31 @@ BOOST_AUTO_TEST_CASE(vectors)
 
 
 /******************************************************************************/
+/* PAYLOAD                                                                    */
+/******************************************************************************/
+
+BOOST_AUTO_TEST_CASE(payloads)
+{
+    auto value = std::make_tuple(1.0, 1, std::string("bleh"));
+    auto plValue = std::make_tuple(size_t(-1), pack(value), pack(value), size_t(-1));
+
+    auto plResult = unpack<decltype(plValue)>(pack(plValue));
+    BOOST_CHECK_EQUAL(std::get<0>(plResult), size_t(-1));
+    BOOST_CHECK_EQUAL(std::get<3>(plResult), size_t(-1));
+
+    {
+        auto result = unpack<decltype(value)>(std::get<1>(plResult));
+        BOOST_CHECK(result == value);
+    }
+
+    {
+        auto result = unpack<decltype(value)>(std::get<2>(plResult));
+        BOOST_CHECK(result == value);
+    }
+}
+
+
+/******************************************************************************/
 /* CUSTOM                                                                     */
 /******************************************************************************/
 

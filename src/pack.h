@@ -431,4 +431,36 @@ struct Pack< std::vector<T> >
 
 };
 
+
+/******************************************************************************/
+/* PAYLOAD                                                                    */
+/******************************************************************************/
+
+template<>
+struct Pack<Payload>
+{
+    static size_t size(const Payload& value)
+    {
+        return value.packetSize();
+    }
+
+    static void pack(const Payload& value, PackIt first, PackIt last)
+    {
+        assert(first + value.packetSize() <= last);
+        *reinterpret_cast<Payload::SizeT*>(first) = value.size();
+        std::copy(value.cbegin(), value.cend(), first + sizeof(Payload::SizeT));
+    }
+
+    static Payload unpack(ConstPackIt first, ConstPackIt last)
+    {
+        Payload value(*reinterpret_cast<const Payload::SizeT*>(first));
+
+        auto it = first + sizeof(Payload::SizeT);
+        assert(it + value.size() <= last);
+
+        std::copy(it, it + value.size(), value.begin());
+        return std::move(value);
+    }
+};
+
 } // slick
