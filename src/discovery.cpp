@@ -164,6 +164,25 @@ erase(const T& value) const
 
 
 /******************************************************************************/
+/* PROTOCOL                                                                   */
+/******************************************************************************/
+
+namespace msg {
+
+static const std::string Init =  "_slick_disc_";
+static constexpr uint32_t Version = 1;
+
+typedef uint16_t Type;
+static constexpr Type Keys  = 1;
+static constexpr Type Want  = 2;
+static constexpr Type Nodes = 3;
+static constexpr Type Get   = 4;
+static constexpr Type Data  = 5;
+
+} // namespace msg
+
+
+/******************************************************************************/
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
@@ -299,17 +318,22 @@ onTimer(size_t)
 
 void
 DistributedDiscovery::
-onPayload(ConnectionHandle handle, Payload&& data)
-{
-    (void) handle;
-    (void) data;
-}
-
-void
-DistributedDiscovery::
 onConnect(ConnectionHandle handle)
 {
-    (void) handle;
+    auto& conn = connections[handle];
+    conn.handle = handle;
+
+    Payload data;
+    auto head = std::make_tuple(msg::Init, msg::Version);
+
+    if (conn.queries.empty())
+        data = pack(head);
+    else {
+        data = packAll(head, msg::Get, conn.queries);
+        conn.queries.clear();
+    }
+
+    endpoint.send(handle, std::move(data));
 }
 
 void
@@ -317,6 +341,91 @@ DistributedDiscovery::
 onDisconnect(ConnectionHandle handle)
 {
     connections.erase(handle);
+}
+
+void
+DistributedDiscovery::
+onPayload(ConnectionHandle handle, Payload&& data)
+{
+    auto& conn = connections[handle];
+    auto it = data.cbegin(), last = data.cend();
+
+    if (!conn) it = onInit(conn, it, last);
+
+    while (it != last) {
+        msg::Type type;
+        it = unpack(type, it, last);
+
+        switch(type) {
+        case msg::Keys:  it = onKeys(conn, it, last); break;
+        case msg::Want:  it = onWant(conn, it, last); break;
+        case msg::Nodes: it = onNodes(conn, it, last); break;
+        case msg::Get:   it = onGet(conn, it, last); break;
+        case msg::Data:  it = onData(conn, it, last); break;
+        default: assert(false);
+        };
+    }
+}
+
+ConstPackIt
+DistributedDiscovery::
+onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    std::string init;
+    it = unpackAll(it, last, init, conn.version);
+
+    if (init != msg::Init) {
+        endpoint.disconnect(conn.handle);
+        return last;
+    }
+
+    assert(conn.version == msg::Version);
+    return it;
+}
+
+ConstPackIt
+DistributedDiscovery::
+onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    (void) conn;
+    (void) last;
+    return it;
+}
+
+ConstPackIt
+DistributedDiscovery::
+onWant(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    (void) conn;
+    (void) last;
+    return it;
+}
+
+ConstPackIt
+DistributedDiscovery::
+onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    (void) conn;
+    (void) last;
+    return it;
+}
+
+ConstPackIt
+DistributedDiscovery::
+onGet(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    (void) conn;
+    (void) last;
+    return it;
+}
+
+ConstPackIt
+DistributedDiscovery::
+onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
+{
+    (void) conn;
+    (void) last;
+    return it;
 }
 
 

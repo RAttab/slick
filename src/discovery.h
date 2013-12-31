@@ -86,17 +86,29 @@ private:
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
 
+    struct ConnState;
+    typedef Payload::const_iterator ConstPackIt; // Don't want to include pack.h
+    ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onWant (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onNodes(ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
+
     size_t timerPeriod();
 
-    struct ConnectionState
+    struct ConnState
     {
-        size_t version;
+        ConnectionHandle handle;
+        uint32_t version;
         double connectionTime;
         std::vector<std::string> queries;
 
-        ConnectionState() :
-            version(0), connectionTime(lockless::wall())
+        ConnState() :
+            handle(0), version(0), connectionTime(lockless::wall())
         {}
+
+        operator bool() const { return version; }
     };
 
 
@@ -173,7 +185,7 @@ private:
     std::unordered_map<std::string, List<Node> > keys;
     std::unordered_map<std::string, List<Watch> > watches;
     std::unordered_map<std::string, Payload> data;
-    std::unordered_map<ConnectionHandle, ConnectionState> connections;
+    std::unordered_map<ConnectionHandle, ConnState> connections;
 
     std::mt19937 rng;
 
