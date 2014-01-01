@@ -135,8 +135,9 @@ struct Socket
 
     operator bool() const { return fd_ >= 0; }
 
-    static Socket connect(const Address& addr, int flags = 0);
-    static Socket accept(int passiveFd, int flags = 0);
+    static Socket connect(const Address& addr);
+    static Socket connect(const std::vector<Address>& addrs);
+    static Socket accept(int passiveFd);
 
 private:
     void init();

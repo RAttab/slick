@@ -145,7 +145,7 @@ ConnectionHandle
 Endpoint::
 connect(const Address& addr)
 {
-    auto socket = Socket::connect(addr, SOCK_NONBLOCK);
+    auto socket = Socket::connect(addr);
     if (socket) return connect(std::move(socket));
     return 0;
 }
@@ -154,11 +154,8 @@ ConnectionHandle
 Endpoint::
 connect(const std::vector<Address>& addrs)
 {
-    for (const auto& addr : addrs) {
-        ConnectionHandle handle = connect(addr);
-        if (handle) return handle;
-    }
-
+    auto socket = Socket::connect(addrs);
+    if (socket) return connect(std::move(socket));
     return 0;
 }
 
@@ -413,12 +410,9 @@ onPollEvent(struct epoll_event& ev)
     assert(ev.events == EPOLLIN);
     assert(sockets.test(ev.data.fd));
 
-    while (true) {
-        Socket socket = Socket::accept(ev.data.fd, SOCK_NONBLOCK);
-        if (!socket) break;
-
+    Socket socket;
+    while (socket = Socket::accept(ev.data.fd))
         connect(std::move(socket));
-    }
 }
 
 

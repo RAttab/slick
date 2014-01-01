@@ -109,13 +109,13 @@ operator=(Socket&& other) noexcept
 
 Socket
 Socket::
-connect(const Address& addr, int flags)
+connect(const Address& addr)
 {
     Socket socket;
     assert(addr);
 
     for (InterfaceIt it(addr.chost(), addr.port); it; it++) {
-        int fd = ::socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
+        int fd = ::socket(it->ai_family, it->ai_socktype | SOCK_NONBLOCK, it->ai_protocol);
         if (fd < 0) continue;
 
         FdGuard guard(fd);
@@ -131,17 +131,28 @@ connect(const Address& addr, int flags)
     return std::move(socket);
 }
 
+Socket
+Socket::
+connect(const std::vector<Address>& addrs)
+{
+    for (const auto& addr : addrs) {
+        Socket socket = connect(addr);
+        if (socket) return std::move(socket);
+    }
+    return Socket();
+}
+
 
 Socket
 Socket::
-accept(int fd, int flags)
+accept(int fd)
 {
     Socket socket;
 
     struct sockaddr addr;
     socklen_t addrlen;
 
-    socket.fd_ = accept4(fd, &addr, &addrlen, flags);
+    socket.fd_ = accept4(fd, &addr, &addrlen, SOCK_NONBLOCK);
     if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return std::move(socket);
     SLICK_CHECK_ERRNO(socket.fd_ >= 0, "Socket.accept");
