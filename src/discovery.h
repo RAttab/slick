@@ -88,6 +88,7 @@ private:
         ConnectionHandle handle;
         uint32_t version;
         double connectionTime;
+        std::vector<std::string> pendingGets;
 
         ConnState() :
             handle(0), version(0), connectionTime(lockless::wall())

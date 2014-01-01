@@ -315,7 +315,17 @@ onConnect(ConnectionHandle handle)
     auto& conn = connections[handle];
     conn.handle = handle;
 
-    endpoint.send(handle, packAll(msg::Init, msg::Version));
+    auto head = std::make_tuple(msg::Init, msg::Version);
+
+    Payload data;
+
+    if (conn.pendingGets.empty()) data = pack(head);
+    else {
+        data = packAll(head, msg::Get, conn.pendingGets);
+        conn.pendingGets.clear();
+    }
+
+    endpoint.send(handle, std::move(data));
 }
 
 void
@@ -489,11 +499,14 @@ void
 DistributedDiscovery::
 doGet(const std::string& key, const std::vector<Address>& addrs)
 {
-    ConnectionHandle handle = endpoint.connect(addrs);
-    if (!handle) return;
+    auto socket = Socket::connect(addrs);
+    if (!socket) return;
 
-    std::vector<std::string> items = { key };
-    endpoint.send(handle, packAll(msg::Get, items));
+    ConnectionHandle handle = socket.fd();
+    connections[handle].pendingGets.emplace_back(key);
+
+    ConnectionHandle otherHandle = endpoint.connect(addrs);
+    assert(handle == otherHandle);
 }
 
 ConstPackIt
