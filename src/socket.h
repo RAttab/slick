@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "pack.h"
+
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -87,6 +89,29 @@ struct Address
     std::string host;
     Port port;
 };
+
+
+template<>
+struct Pack<Address>
+{
+    static size_t size(const Address& value)
+    {
+        return packedSizeAll(value.host, value.port);
+    }
+
+    static void pack(const Address& value, PackIt first, PackIt last)
+    {
+        packAll(first, last, value.host, value.port);
+    }
+
+    static Address unpack(ConstPackIt first, ConstPackIt last)
+    {
+        Address value;
+        unpackAll(first, last, value.host, value.port);
+        return std::move(value);
+    }
+};
+
 
 
 /******************************************************************************/

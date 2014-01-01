@@ -56,7 +56,6 @@ struct DistributedDiscovery : public Discovery
 
         DefaultKeyTTL = 60 * 10,
         DefaultNodeTTL = 60 * 60 * 8,
-
     };
 
     DistributedDiscovery(
