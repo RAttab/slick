@@ -5,8 +5,7 @@
    Packet sending and timing test.
 */
 
-#include "client.h"
-#include "provider.h"
+#include "endpoint.h"
 #include "pack.h"
 #include "test_utils.h"
 #include "lockless/format.h"
@@ -50,7 +49,7 @@ void runProvider(Port port)
 {
     size_t recv = 0, dropped = 0;
 
-    EndpointProvider provider(port);
+    PassiveEndpoint provider(port);
 
     provider.onNewConnection = [] (ConnectionHandle conn) {
         fprintf(stderr, "\nprv: new %d\n", conn);;
@@ -91,7 +90,7 @@ void runClient(vector<string> uris)
 {
     size_t sent = 0, recv = 0, dropped = 0;
 
-    EndpointClient client;
+    Endpoint client;
 
     client.onNewConnection = [] (ConnectionHandle conn) {
         fprintf(stderr, "\ncli: new %d\n", conn);;

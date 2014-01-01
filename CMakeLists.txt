@@ -90,8 +90,8 @@ install(
     src/socket.h
     src/queue.h
     src/endpoint.h
-    src/client.h
-    src/provider.h
+    src/discovery.h
+    src/endpoint_disc.h
 
     DESTINATION
     include/slick)
@@ -106,8 +106,7 @@ add_library(
     src/socket.cpp
     src/endpoint.cpp
     src/discovery.cpp
-    src/client.cpp
-    src/provider.cpp)
+    src/endpoint_disc.h)
 
 install(TARGETS slick DESTINATION lib)
 

@@ -143,11 +143,20 @@ connect(Socket&& socket)
 
 ConnectionHandle
 Endpoint::
+connect(const Address& addr)
+{
+    auto socket = Socket::connect(addr, SOCK_NONBLOCK);
+    if (socket) return connect(std::move(socket));
+    return 0;
+}
+
+ConnectionHandle
+Endpoint::
 connect(const std::vector<Address>& addrs)
 {
     for (const auto& addr : addrs) {
-        auto socket = Socket::connect(addr, SOCK_NONBLOCK);
-        if (socket) return connect(std::move(socket));
+        ConnectionHandle handle = connect(addr);
+        if (handle) return handle;
     }
 
     return 0;

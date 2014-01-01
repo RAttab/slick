@@ -64,13 +64,14 @@ struct Endpoint
     // \todo Would be nice to have multicast support.
 
 
-    ConnectionHandle connect(Socket&& socket);
+    ConnectionHandle connect(const Address& addr);
     ConnectionHandle connect(const std::vector<Address>& addrs);
 
     void disconnect(ConnectionHandle handle);
 
 protected:
 
+    ConnectionHandle connect(Socket&& socket);
     virtual void onPollEvent(struct epoll_event&)
     {
         throw std::logic_error("unknown epoll event");
@@ -151,5 +152,30 @@ protected:
 private:
     PassiveSockets sockets;
 };
+
+
+/******************************************************************************/
+/* CONNECTION                                                                 */
+/******************************************************************************/
+
+struct Connection
+{
+    Connection(Endpoint& endpoint, const Address& addr) :
+        endpoint(endpoint), conn(endpoint.connect(addr))
+    {}
+
+    Connection(Endpoint& endpoint, const std::vector<Address>& addrs) :
+        endpoint(endpoint), conn(endpoint.connect(addrs))
+    {}
+
+    ~Connection() { endpoint.disconnect(conn); }
+
+    operator bool() const { return !conn; }
+
+private:
+    Endpoint& endpoint;
+    ConnectionHandle conn;
+};
+
 
 } // slick

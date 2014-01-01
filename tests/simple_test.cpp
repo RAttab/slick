@@ -8,8 +8,7 @@
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_DYN_LINK
 
-#include "provider.h"
-#include "client.h"
+#include "endpoint.h"
 #include "pack.h"
 #include "utils.h"
 #include "test_utils.h"
@@ -36,7 +35,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
     SourcePoller poller;
 
-    EndpointProvider provider(listenPort);
+    PassiveEndpoint provider(listenPort);
     poller.add(provider);
 
     provider.onNewConnection = [] (ConnectionHandle conn) {
@@ -53,7 +52,7 @@ BOOST_AUTO_TEST_CASE(basics)
         pingRecv++;
     };
 
-    EndpointClient client;
+    Endpoint client;
     poller.add(client);
 
     client.onNewConnection = [] (ConnectionHandle conn) {
@@ -105,15 +104,15 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     SourcePoller provPoller;
 
-    array<shared_ptr<EndpointProvider>, N> providers;
+    array<shared_ptr<PassiveEndpoint>, N> providers;
     array<size_t, N> clientIdSums;
     clientIdSums.fill(0);
 
     for (size_t id = 0; id < N; ++id) {
-        providers[id] = make_shared<EndpointProvider>(listenPortStart + id);
+        providers[id] = make_shared<PassiveEndpoint>(listenPortStart + id);
         provPoller.add(*providers[id]);
 
-        weak_ptr<EndpointProvider> prov(providers[id]);
+        weak_ptr<PassiveEndpoint> prov(providers[id]);
         providers[id]->onPayload = [=, &clientIdSums] (ConnectionHandle conn, Payload&& data) {
             clientIdSums[id] += unpack<size_t>(data);
 
@@ -137,7 +136,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     SourcePoller clientPoller;
 
-    EndpointClient client;
+    Endpoint client;
     clientPoller.add(client);
 
     client.onDroppedPayload = [] (ConnectionHandle, Payload&&) {
@@ -196,7 +195,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
     SourcePoller poller;
 
-    EndpointProvider provider(listenPort);
+    PassiveEndpoint provider(listenPort);
     poller.add(provider);
 
     provider.onNewConnection = [&] (ConnectionHandle conn) {
@@ -208,7 +207,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
         printf("prv: lost %d\n", conn);;
     };
 
-    EndpointClient client;
+    Endpoint client;
     poller.add(client);
 
     std::atomic<bool> shutdown(false);
@@ -242,7 +241,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
 
         SourcePoller poller;
 
-        EndpointProvider provider(listenPort);
+        PassiveEndpoint provider(listenPort);
         poller.add(provider);
 
         provider.onNewConnection = [&] (ConnectionHandle conn) {
@@ -271,7 +270,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
     else {
         SourcePoller poller;
 
-        EndpointClient client;
+        Endpoint client;
         poller.add(client);
 
         std::atomic<bool> shutdown(false);
