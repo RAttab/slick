@@ -144,7 +144,7 @@ size_t packedSize(const T& value)
     return Pack<T>::size(value);
 }
 
-size_t packedSizeAll() { return 0; }
+inline size_t packedSizeAll() { return 0; }
 
 template<typename Arg, typename... Rest>
 size_t packedSizeAll(const Arg& arg, const Rest&... rest)
@@ -173,7 +173,7 @@ Payload pack(const T& value)
 }
 
 
-PackIt packAll(PackIt first, PackIt) { return first; }
+inline PackIt packAll(PackIt first, PackIt) { return first; }
 
 template<typename Arg, typename... Rest>
 PackIt packAll(PackIt first, PackIt last, const Arg& arg, const Rest&... rest)
@@ -221,7 +221,7 @@ ConstPackIt unpack(T& value, ConstPackIt first, ConstPackIt last)
 }
 
 
-ConstPackIt unpackAll(ConstPackIt first, ConstPackIt) { return first; }
+inline ConstPackIt unpackAll(ConstPackIt first, ConstPackIt) { return first; }
 
 template<typename Arg, typename... Rest>
 ConstPackIt unpackAll(ConstPackIt first, ConstPackIt last, Arg& arg, Rest&... rest)
