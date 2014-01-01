@@ -90,13 +90,13 @@ private:
     typedef Payload::const_iterator ConstPackIt; // Don't want to include pack.h
     ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onWant (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onQuery(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onNodes(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
     typedef std::vector<Address> NodeLocation;
-    typedef std::string WantItem;
+    typedef std::string QueryItem;
     typedef std::tuple<NodeLocation, size_t> NodeItem;
     typedef std::tuple<std::string, Payload> DataItem;
     typedef std::tuple<std::string, NodeLocation, size_t> KeyItem;
@@ -203,7 +203,6 @@ private:
 
             return std::vector<T>(result.begin(), result.end());
         }
-
 
     private:
         std::vector<Node> list;

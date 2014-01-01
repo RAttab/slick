@@ -136,7 +136,7 @@ static constexpr uint32_t Version = 1;
 
 typedef uint16_t Type;
 static constexpr Type Keys  = 1;
-static constexpr Type Want  = 2;
+static constexpr Type Query = 2;
 static constexpr Type Nodes = 3;
 static constexpr Type Get   = 4;
 static constexpr Type Data  = 5;
@@ -228,7 +228,7 @@ onPayload(ConnectionHandle handle, Payload&& data)
 
         switch(type) {
         case msg::Keys:  it = onKeys(conn, it, last); break;
-        case msg::Want:  it = onWant(conn, it, last); break;
+        case msg::Query: it = onQuery(conn, it, last); break;
         case msg::Nodes: it = onNodes(conn, it, last); break;
         case msg::Get:   it = onGet(conn, it, last); break;
         case msg::Data:  it = onData(conn, it, last); break;
@@ -258,8 +258,8 @@ discover(const std::string& key, Watch&& watch)
     }
 
     if (!watches.count(key)) {
-        std::vector<WantItem> items = { key };
-        endpoint.broadcast(packAll(msg::Want, endpoint.interfaces(), items));
+        std::vector<QueryItem> items = { key };
+        endpoint.broadcast(packAll(msg::Query, endpoint.interfaces(), items));
     }
 
     watches[key].insert(std::move(watch));
@@ -355,11 +355,11 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!watches.empty()) {
-        std::vector<WantItem> items;
+        std::vector<QueryItem> items;
         for (const auto& watch : watches)
             items.emplace_back(watch.first);
 
-        auto msg = packAll(msg::Want, endpoint.interfaces(), items);
+        auto msg = packAll(msg::Query, endpoint.interfaces(), items);
         endpoint.send(conn.handle, std::move(msg));
     }
 
@@ -375,8 +375,6 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
         endpoint.send(conn.handle, packAll(msg::Nodes, items));
     }
-
-    // \todo send the KEY, WANT and NODES message
 
     return it;
 }
@@ -421,13 +419,13 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
 
 ConstPackIt
 DistributedDiscovery::
-onWant(ConnState& conn, ConstPackIt it, ConstPackIt last)
+onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     NodeLocation node;
-    std::vector<WantItem> items;
+    std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
 
-    std::vector<WantItem> toForward;
+    std::vector<QueryItem> toForward;
 
     for (const auto& key : items) {
         auto it = keys.find(key);
@@ -449,7 +447,7 @@ onWant(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!toForward.empty())
-        endpoint.broadcast(packAll(msg::Want, toForward));
+        endpoint.broadcast(packAll(msg::Query, toForward));
 
     return it;
 }
