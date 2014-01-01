@@ -4,55 +4,6 @@
 
    Implementation of the node discovery database.
 
-   PROTOCOL:
-
-   onConnect:
-       send(HELLO)
-
-   onDiscover(key):
-       watches.add(key)
-       broadcast(WATCHING[node -> node])
-       if (keys.has(key))
-           send(GET(key -> node)
-
-   onPublish(key, data):
-        data.add(key -> data)
-        broadcast(KEY[key, node, ttl])
-
-   recv(HELLO):
-       send(KEY[data.keys(), me()])
-       send(WANT[watches.keys(), me()])
-       send(NODES[nodes.rnd() -> node, ttl])
-
-   recv(KEY[key, node, ttl]):
-       if (keys.has(key, node)) return
-
-       keys.add(key -> node, ttl)
-       broadcast(KEY[key, node, ttl])
-
-       if (watches.has(key))
-           send(node, GET[key])
-
-   recv(WANT[key, node]):
-       if (keys.has(key) -> node, ttl)
-           reply(KEY[key, node ttl])
-           send(node, KEY[key, node, ttl])
-       else
-           keys.add(key -> [])
-           broadcast(WANT[key, node])
-
-    recv(GET[key]):
-        reply(DATA[key, data.get(key)])
-
-    recv(DATA[key, data]):
-        watches.trigger(data)
-
-    recv(NODES[node, ttl]):
-        nodes.add(node -> ttl)
-
-    \todo Need some kind of decay mechanism for the keys structure. Otherwise
-    stale keys will remain forever.
-
 */
 
 #include "discovery.h"
