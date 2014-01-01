@@ -77,39 +77,12 @@ struct DistributedDiscovery : public Discovery
 
 private:
 
-    struct Watch;
-    void discover(const std::string& key, Watch&& watch);
-    ConnectionHandle connect(const std::vector<Address>& addrs);
-
-    void onTimer(size_t);
-    void onPayload(ConnectionHandle handle, Payload&& data);
-    void onConnect(ConnectionHandle handle);
-    void onDisconnect(ConnectionHandle handle);
-
-    struct ConnState;
-    typedef Payload::const_iterator ConstPackIt; // Don't want to include pack.h
-    ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onQuery(ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onNodes(ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
-
     typedef std::vector<Address> NodeLocation;
     typedef std::string QueryItem;
     typedef std::tuple<NodeLocation, size_t> NodeItem;
     typedef std::tuple<std::string, Payload> DataItem;
     typedef std::tuple<std::string, NodeLocation, size_t> KeyItem;
 
-    struct Node;
-    void doGet(const std::string& key, const NodeLocation& node);
-
-    size_t timerPeriod();
-
-    template<typename T> struct List;
-    void expireNodes(List<Node>&);
-    void expireKeys();
-    void rotateConnections();
 
     struct ConnState
     {
@@ -152,6 +125,7 @@ private:
         bool operator<(const Node& other) const;
     };
 
+
     struct Watch
     {
         WatchHandle handle;
@@ -164,6 +138,7 @@ private:
             return handle < other.handle;
         }
     };
+
 
     template<typename T>
     struct List
@@ -212,6 +187,7 @@ private:
     size_t keyTTL_;
     size_t nodeTTL_;
 
+
     List<Node> nodes;
     std::unordered_map<std::string, List<Node> > keys;
     std::unordered_map<std::string, std::set<Watch> > watches;
@@ -231,6 +207,27 @@ private:
     Defer<QueueSize, std::string, Payload> publishes;
     Defer<QueueSize, std::string, Watch> discovers;
     Defer<QueueSize, std::string, WatchHandle> forgets;
+
+    size_t timerPeriod();
+    void discover(const std::string& key, Watch&& watch);
+    void onTimer(size_t);
+    void onPayload(ConnectionHandle handle, Payload&& data);
+    void onConnect(ConnectionHandle handle);
+    void onDisconnect(ConnectionHandle handle);
+
+    typedef Payload::const_iterator ConstPackIt; // Don't want to include pack.h
+    ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onQuery(ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onNodes(ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
+
+    void doGet(const std::string& key, const NodeLocation& node);
+    void expireNodes(List<Node>&);
+    void expireKeys();
+    void rotateConnections();
+
 };
 
 } // slick
