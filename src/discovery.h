@@ -208,6 +208,7 @@ private:
     Defer<QueueSize, std::string, Watch> discovers;
     Defer<QueueSize, std::string, WatchHandle> forgets;
 
+
     size_t timerPeriod();
     void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);

@@ -348,6 +348,8 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     if (!data.empty()) {
         std::vector<KeyItem> items;
+        items.reserve(data.size());
+
         for (const auto& key : data)
             items.emplace_back(key.first, endpoint.interfaces(), keyTTL_);
 
@@ -356,6 +358,8 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     if (!watches.empty()) {
         std::vector<QueryItem> items;
+        items.reserve(watches.size());
+
         for (const auto& watch : watches)
             items.emplace_back(watch.first);
 
@@ -364,11 +368,12 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!nodes.empty()) {
-        std::vector<NodeItem> items;
-        items.emplace_back(endpoint.interfaces(), nodeTTL_);
-
         double now = lockless::wall();
         size_t picks = lockless::log2(nodes.size());
+
+        std::vector<NodeItem> items;
+        items.reserve(picks + 1);
+        items.emplace_back(endpoint.interfaces(), nodeTTL_);
 
         for (const auto& node : nodes.pickRandom(rng, picks))
             items.emplace_back(node.addrs, node.ttl(now));
@@ -388,6 +393,7 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
 
     double now = lockless::wall();
     std::vector<KeyItem> toForward;
+    toForward.reserve(items.size());
 
     for (auto& item : items) {
         std::string key;
@@ -425,18 +431,21 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
 
+    std::vector<KeyItem> reply;
+    reply.reserve(items.size());
+
     for (const auto& key : items) {
         auto it = keys.find(key);
         if (it == keys.end()) continue;
 
-        std::vector<KeyItem> items;
         for (const auto& node : it->second) {
             if (!node.ttl()) continue;
-            items.emplace_back(key, node.addrs, node.ttl());
+            reply.emplace_back(key, node.addrs, node.ttl());
         }
-
-        endpoint.send(conn.handle, packAll(msg::Keys, items));
     }
+
+    if (!reply.empty())
+        endpoint.send(conn.handle, packAll(msg::Keys, reply));
 
     return it;
 }
@@ -450,6 +459,7 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 
     double now = lockless::wall();
     std::vector<NodeItem> toForward;
+    toForward.reserve(items.size());
 
     for (auto& item : items) {
         NodeLocation node;
