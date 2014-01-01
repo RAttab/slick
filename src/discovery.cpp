@@ -502,7 +502,6 @@ ConstPackIt
 DistributedDiscovery::
 onGet(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
-
     std::vector<std::string> items;
     it = unpack(items, it, last);
 
@@ -590,20 +589,32 @@ DistributedDiscovery::
 rotateConnections()
 {
     size_t targetSize = lockless::log2(nodes.size());
-    size_t disconnects =
-        std::min(lockless::log2(targetSize), connections.size());
+    size_t disconnects =lockless::log2(targetSize);
 
     if (connections.size() - disconnects > targetSize)
         disconnects = connections.size() - targetSize;
 
-    for (size_t i = 0; i < disconnects; ++i) {
-        std::uniform_int_distribution<size_t> dist(0, connections.size() -1);
+    std::set<ConnectionHandle> toDisconnect;
 
-        auto it = connections.begin();
-        std::advance(it, dist(rng));
-
-        endpoint.disconnect(it->second.handle);
+    if (disconnects >= connections.size()) {
+        for (const auto& conn : connections)
+            toDisconnect.insert(conn.second.handle);
     }
+    else {
+        for (size_t i = 0; i < disconnects; ++i) {
+            std::uniform_int_distribution<size_t> dist(0, connections.size() -1);
+
+            auto it = connections.begin();
+            std::advance(it, dist(rng));
+
+            toDisconnect.insert(it->second.handle);
+        }
+    }
+
+    // Need to defer the call because the call could invalidate our connection
+    // iterator through our onLostConnection callback.
+    for (auto conn : toDisconnect)
+        endpoint.disconnect(conn);
 
     size_t connects = targetSize - connections.size();
     for (const auto& node : nodes.pickRandom(rng, connects))
