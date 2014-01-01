@@ -425,29 +425,18 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
 
-    std::vector<QueryItem> toForward;
-
     for (const auto& key : items) {
         auto it = keys.find(key);
+        if (it == keys.end()) continue;
 
-        if (it != keys.end()) {
-            std::vector<KeyItem> items;
-            for (const auto& node : it->second) {
-                if (!node.ttl()) continue;
-                items.emplace_back(key, node.addrs, node.ttl());
-            }
-
-            endpoint.send(conn.handle, packAll(msg::Keys, items));
+        std::vector<KeyItem> items;
+        for (const auto& node : it->second) {
+            if (!node.ttl()) continue;
+            items.emplace_back(key, node.addrs, node.ttl());
         }
 
-        else {
-            keys[key] = List<Node>();
-            toForward.emplace_back(key);
-        }
+        endpoint.send(conn.handle, packAll(msg::Keys, items));
     }
-
-    if (!toForward.empty())
-        endpoint.broadcast(packAll(msg::Query, toForward));
 
     return it;
 }
