@@ -375,8 +375,11 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         items.reserve(picks + 1);
         items.emplace_back(endpoint.interfaces(), nodeTTL_);
 
-        for (const auto& node : nodes.pickRandom(rng, picks))
-            items.emplace_back(node.addrs, node.ttl(now));
+        for (const auto& node : nodes.pickRandom(rng, picks)) {
+            size_t ttl = node.ttl(now);
+            if (!ttl) continue;
+            items.emplace_back(node.addrs, ttl);
+        }
 
         endpoint.send(conn.handle, packAll(msg::Nodes, items));
     }
