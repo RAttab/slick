@@ -146,15 +146,6 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     endpoint.onLostConnection = bind(&DistributedDiscovery::onDisconnect, this, _1);
     poller.add(endpoint);
 
-    payloads.onOperation = std::bind(&DistributedDiscovery::onPayload, this, _1, _2);
-    poller.add(payloads);
-
-    connects.onOperation = std::bind(&DistributedDiscovery::onConnect, this, _1);
-    poller.add(connects);
-
-    disconnects.onOperation = std::bind(&DistributedDiscovery::onDisconnect, this, _1);
-    poller.add(disconnects);
-
     retracts.onOperation = std::bind(&DistributedDiscovery::retract, this, _1);
     poller.add(retracts);
 
@@ -200,11 +191,6 @@ void
 DistributedDiscovery::
 onPayload(ConnectionHandle handle, Payload&& data)
 {
-    if (!isPollThread()) {
-        payloads.defer(handle, std::move(data));
-        return;
-    }
-
     auto& conn = connections[handle];
     auto it = data.cbegin(), last = data.cend();
 
@@ -307,11 +293,6 @@ void
 DistributedDiscovery::
 onConnect(ConnectionHandle handle)
 {
-    if (!isPollThread()) {
-        connects.defer(handle);
-        return;
-    }
-
     auto& conn = connections[handle];
     conn.handle = handle;
 
@@ -332,11 +313,6 @@ void
 DistributedDiscovery::
 onDisconnect(ConnectionHandle handle)
 {
-    if (!isPollThread()) {
-        connects.defer(handle);
-        return;
-    }
-
     connections.erase(handle);
 }
 

@@ -208,11 +208,6 @@ private:
     Defer<QueueSize, std::string, Watch> discovers;
     Defer<QueueSize, std::string, WatchHandle> forgets;
 
-    enum { PayloadQueueSize = 1 << 6 };
-    Defer<PayloadQueueSize, ConnectionHandle, Payload> payloads;
-    Defer<QueueSize, ConnectionHandle> connects;
-    Defer<QueueSize, ConnectionHandle> disconnects;
-
 
     size_t timerPeriod();
     void discover(const std::string& key, Watch&& watch);
