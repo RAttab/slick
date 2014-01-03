@@ -1,4 +1,4 @@
-/* simple_test.cpp                                 -*- C++ -*-
+/* endpoint_test.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 30 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
