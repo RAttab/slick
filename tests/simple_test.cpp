@@ -23,6 +23,27 @@ using namespace lockless;
 
 namespace { Port portCounter = 20000; }
 
+BOOST_AUTO_TEST_CASE(interfaces_lp)
+{
+    cerr << fmtTitle("interfaces-lp", '=') << endl;
+
+    auto interfaces = networkInterfaces();
+
+    for (size_t i = 0; i < interfaces.size(); ++i)
+        printf("%lu: %s\n", i, interfaces[i].toString().c_str());
+
+}
+
+BOOST_AUTO_TEST_CASE(interfaces_no_lp)
+{
+    cerr << fmtTitle("interfaces-no-lp", '=') << endl;
+
+    auto interfaces = networkInterfaces(true);
+    for (size_t i = 0; i < interfaces.size(); ++i)
+        printf("%lu: %s\n", i, interfaces[i].toString().c_str());
+
+}
+
 
 BOOST_AUTO_TEST_CASE(basics)
 {

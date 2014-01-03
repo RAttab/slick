@@ -64,6 +64,8 @@ struct PortRange
 struct Address
 {
     Address() : port(0) {}
+    Address(struct sockaddr* addr);
+    Address(struct sockaddr* addr, socklen_t addrlen);
     Address(const std::string& hostPort);
     Address(std::string host, Port port) :
         host(std::move(host)), port(port)
@@ -168,10 +170,14 @@ struct PassiveSockets
         return std::find(fds_.begin(), fds_.end(), fd) != fds_.end();
     };
 
-    std::vector<Address> interfaces() const;
-
 private:
     std::vector<int> fds_;
 };
+
+
+/******************************************************************************/
+/* INTERFACES                                                                 */
+/******************************************************************************/
+std::vector<Address> networkInterfaces(bool excludeLoopback = false);
 
 } // slick

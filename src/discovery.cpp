@@ -94,7 +94,7 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     endpoint(port),
     timer(timerPeriod())
 {
-    myNode = endpoint.interfaces();
+    myNode = networkInterfaces(true);
 
     double now = lockless::wall();
     for (auto& addr : seed)

@@ -8,12 +8,15 @@
 #include "socket.h"
 #include "utils.h"
 
+#include <array>
 #include <string>
 #include <cstring>
 #include <cassert>
 #include <netdb.h>
+#include <ifaddrs.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
@@ -32,6 +35,36 @@ Address(const std::string& hostPort)
 
     host = hostPort.substr(0, pos);
     port = stoi(hostPort.substr(pos + 1));
+}
+
+Address::
+Address(struct sockaddr* addr)
+{
+    socklen_t addrlen;
+    int family = addr->sa_family;
+
+    if (family == AF_INET) addrlen = sizeof(struct sockaddr_in);
+    else if (family == AF_INET6) addrlen = sizeof(struct sockaddr_in6);
+    else assert(false);
+
+    *this = Address(addr, addrlen);
+}
+
+Address::
+Address(struct sockaddr* addr, socklen_t addrlen)
+{
+    std::array<char, 256> host;
+    std::array<char, 256> service;
+
+    int res = getnameinfo(
+            addr, addrlen,
+            host.data(), host.size(),
+            service.data(), service.size(),
+            NI_NUMERICHOST | NI_NUMERICSERV);
+    SLICK_CHECK_ERRNO(!res, "Address.getnameinfo");
+
+    this->host = std::string(host.data());
+    this->port = atoi(service.data());
 }
 
 
@@ -75,7 +108,6 @@ struct InterfaceIt
     const struct addrinfo& operator* () const { return *cur; }
     const struct addrinfo* operator-> () const { return cur; }
 
-
 private:
     struct addrinfo* first;
     struct addrinfo* cur;
@@ -115,6 +147,7 @@ connect(const Address& addr)
     assert(addr);
 
     for (InterfaceIt it(addr.chost(), addr.port); it; it++) {
+
         int fd = ::socket(it->ai_family, it->ai_socktype | SOCK_NONBLOCK, it->ai_protocol);
         if (fd < 0) continue;
 
@@ -234,14 +267,37 @@ PassiveSockets::
     for (int fd : fds_) close(fd);
 }
 
-std::vector<Address>
-PassiveSockets::
-interfaces() const
-{
-    assert(false);
-    return {};
-}
 
+/******************************************************************************/
+/* NETWORK INTERFACES                                                         */
+/******************************************************************************/
+
+std::vector<Address>
+networkInterfaces(bool excludeLoopback)
+{
+    std::vector<Address> result;
+    unsigned include = IFF_UP | IFF_RUNNING;
+    unsigned exclude = excludeLoopback ? IFF_LOOPBACK : 0;
+
+    struct ifaddrs* it;
+    int ret = getifaddrs(&it);
+    SLICK_CHECK_ERRNO(!ret, "networkInterfaces.getifaddrs");
+    auto addrsGuard = guard([=] { freeifaddrs(it); });
+
+    for(; it; it = it->ifa_next) {
+
+        if (!it->ifa_addr) continue;
+        if (it->ifa_flags & exclude) continue;
+        if ((it->ifa_flags & include) != include) continue;
+
+        int family = it->ifa_addr->sa_family;
+        if (family != AF_INET && family != AF_INET6) continue;
+
+        result.emplace_back(it->ifa_addr);
+    }
+
+    return std::move(result);
+}
 
 } // slick
 
