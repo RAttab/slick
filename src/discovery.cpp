@@ -81,8 +81,8 @@ DistributedDiscovery::
 timerPeriod()
 {
     enum { BasePeriod = 60 };
-    std::uniform_int_distribution<size_t>dist(BasePeriod, BasePeriod * 2);
-    return dist(rng);
+    size_t min = BasePeriod / 2, max = min + BasePeriod;
+    return std::uniform_int_distribution<size_t> dist(min, max)(rng);
 }
 
 DistributedDiscovery::
@@ -92,7 +92,7 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     myId(UUID::random()),
     rng(lockless::wall()),
     endpoint(port),
-    timer(timerPeriod()) // \todo add randomness
+    timer(timerPeriod())
 {
     myNode = endpoint.interfaces();
 
