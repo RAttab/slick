@@ -20,14 +20,14 @@ namespace slick {
 /******************************************************************************/
 
 Timer::
-Timer(double delay)
+Timer(double delay, double init)
 {
     int clockid = delay < 0.01 ? CLOCK_MONOTONIC : CLOCK_REALTIME;
 
     fd_ = timerfd_create(clockid, TFD_NONBLOCK);
     SLICK_CHECK_ERRNO(fd_ != -1, "timer.create");
 
-    setDelay(delay);
+    setDelay(delay, init);
 }
 
 
@@ -57,13 +57,18 @@ poll()
 
 void
 Timer::
-setDelay(double delay)
+setDelay(double delay, double init)
 {
-    struct timespec ts;
-    ts.tv_sec = uint64_t(delay);
-    ts.tv_nsec = delay - ts.tv_sec;
+    if (init == 0.0) init = delay;
 
-    struct itimerspec spec = { ts, ts};
+    auto ts = [] (double value) {
+        struct timespec ts;
+        ts.tv_sec = uint64_t(value);
+        ts.tv_nsec = value - ts.tv_sec;
+        return ts;
+    };
+
+    struct itimerspec spec = { ts(delay), ts(init) };
     int res = timerfd_settime(fd_, 0, &spec, nullptr);
     SLICK_CHECK_ERRNO(res != -1, "timer.settime");
 }

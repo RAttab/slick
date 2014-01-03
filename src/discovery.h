@@ -57,9 +57,10 @@ struct DistributedDiscovery : public Discovery
     enum {
         DefaultPort = 18888,
 
-        SeedTTL        = 60 * 60,
+        SeedTTL        = 60 * 60 * 1,
         DefaultKeyTTL  = 60 * 60 * 1,
         DefaultNodeTTL = 60 * 60 * 8,
+        DefaultPeriod  = 60 * 1,
     };
 
     DistributedDiscovery(
@@ -77,6 +78,7 @@ struct DistributedDiscovery : public Discovery
 
     void keyTTL(size_t ttl = DefaultKeyTTL) { keyTTL_ = ttl; }
     void nodeTTL(size_t ttl = DefaultNodeTTL) { nodeTTL_ = ttl; }
+    void setPeriod(size_t sec = DefaultPeriod);
 
 private:
 
@@ -194,7 +196,7 @@ private:
     Defer<QueueSize, std::string, WatchHandle> forgets;
 
 
-    size_t timerPeriod();
+    size_t timerPeriod(size_t secs);
     void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);
     void onPayload(ConnectionHandle handle, Payload&& data);

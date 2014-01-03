@@ -76,15 +76,6 @@ static constexpr Type Data  = 5;
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
-size_t
-DistributedDiscovery::
-timerPeriod()
-{
-    enum { BasePeriod = 60 };
-    size_t min = BasePeriod / 2, max = min + BasePeriod;
-    return std::uniform_int_distribution<size_t>(min, max)(rng);
-}
-
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     keyTTL_(DefaultKeyTTL),
@@ -92,7 +83,7 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     myId(UUID::random()),
     rng(lockless::wall()),
     endpoint(port),
-    timer(timerPeriod())
+    timer(timerPeriod(DefaultPeriod))
 {
     myNode = networkInterfaces(true);
 
@@ -125,6 +116,20 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     poller.add(timer);
 }
 
+size_t
+DistributedDiscovery::
+timerPeriod(size_t base)
+{
+    size_t min = base / 2, max = min + base;
+    return std::uniform_int_distribution<size_t>(min, max)(rng);
+}
+
+void
+DistributedDiscovery::
+setPeriod(size_t sec)
+{
+    timer.setDelay(timerPeriod(sec));
+}
 
 void
 DistributedDiscovery::

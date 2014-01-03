@@ -19,7 +19,7 @@ namespace slick {
 
 struct Timer
 {
-    Timer(double delay);
+    Timer(double delay, double init = 0);
     ~Timer();
 
     typedef std::function<void(uint64_t count)> TimerFn;
@@ -28,11 +28,9 @@ struct Timer
     int fd() const { return fd_; }
     void poll();
 
+    void setDelay(double delay, double init = 0);
+
 private:
-
-    /** Could make this public but that introduces concurrency issues. */
-    void setDelay(double delay);
-
     int fd_;
 };
 
