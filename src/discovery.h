@@ -3,6 +3,8 @@
    FreeBSD-style copyright and disclaimer apply
 
    Endpoint discovery.
+
+   \todo Fix the bajillion races with watch removal.
 */
 
 #pragma once
@@ -57,10 +59,8 @@ struct DistributedDiscovery : public Discovery
     enum {
         DefaultPort = 18888,
 
-        SeedTTL        = 60 * 60 * 1,
-        DefaultKeyTTL  = 60 * 60 * 1,
-        DefaultNodeTTL = 60 * 60 * 8,
-        DefaultPeriod  = 60 * 1,
+        DefaultPeriod = 60 * 1,
+        DefaultTTL    = 60 * 60 * 8,
     };
 
     DistributedDiscovery(
@@ -76,8 +76,7 @@ struct DistributedDiscovery : public Discovery
     virtual void publish(const std::string& key, Payload&& data);
     virtual void retract(const std::string& key);
 
-    void keyTTL(size_t ttl = DefaultKeyTTL) { keyTTL_ = ttl; }
-    void nodeTTL(size_t ttl = DefaultNodeTTL) { nodeTTL_ = ttl; }
+    void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
     void setPeriod(size_t sec = DefaultPeriod);
 
 private:
@@ -169,8 +168,7 @@ private:
     };
 
 
-    size_t keyTTL_;
-    size_t nodeTTL_;
+    size_t ttl_;
 
     UUID myId;
     NodeLocation myNode;

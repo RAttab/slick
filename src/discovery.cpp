@@ -71,15 +71,13 @@ static constexpr Type Data  = 5;
 } // namespace Msg
 
 
-
 /******************************************************************************/
 /* DISTRIBUTED DISCOVERY                                                      */
 /******************************************************************************/
 
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seed, Port port) :
-    keyTTL_(DefaultKeyTTL),
-    nodeTTL_(DefaultNodeTTL),
+    ttl_(DefaultTTL),
     myId(UUID::random()),
     rng(lockless::wall()),
     endpoint(port),
@@ -90,7 +88,7 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
 
     double now = lockless::wall();
     for (auto& addr : seed)
-        nodes.emplace(UUID::random(), NodeLocation({addr}), SeedTTL, now);
+        nodes.emplace(UUID::random(), NodeLocation({addr}), DefaultTTL, now);
 
     using namespace std::placeholders;
 
@@ -236,7 +234,7 @@ publish(const std::string& key, Payload&& data)
     this->data[key] = Data(std::move(data));
 
     std::vector<KeyItem> items;
-    items.emplace_back(key, myId, myNode, keyTTL_);
+    items.emplace_back(key, myId, myNode, ttl_);
 
     endpoint.broadcast(packAll(Msg::Keys, items));
 }
@@ -303,7 +301,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         items.reserve(data.size());
 
         for (const auto& key : data)
-            items.emplace_back(key.first, key.second.id, myNode, keyTTL_);
+            items.emplace_back(key.first, key.second.id, myNode, ttl_);
 
         endpoint.send(conn.fd, packAll(Msg::Keys, items));
     }
@@ -325,7 +323,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
         std::vector<NodeItem> items;
         items.reserve(numPicks + 1);
-        items.emplace_back(myId, myNode, nodeTTL_);
+        items.emplace_back(myId, myNode, ttl_);
 
         auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), numPicks, rng);
         for (const auto& node : picks) {
