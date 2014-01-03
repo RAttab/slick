@@ -27,8 +27,7 @@ struct UUID
     uint32_t time_low;
     uint16_t time_mid;
     uint16_t time_hi_and_version;
-    uint8_t  clk_seq_hi_res;
-    uint8_t  clk_seq_low;
+    uint16_t clock_seq;
     uint8_t  node[6];
 
     UUID();
@@ -46,11 +45,7 @@ struct UUID
         if (time_hi_and_version != other.time_hi_and_version)
             return time_hi_and_version < other.time_hi_and_version;
 
-        if (clk_seq_hi_res != other.clk_seq_hi_res)
-            return clk_seq_hi_res < other.clk_seq_hi_res;
-
-        if (clk_seq_low != other.clk_seq_low)
-            return clk_seq_low < other.clk_seq_low;
+        if (clock_seq != other.clock_seq) return clock_seq < other.clock_seq;
 
         for (size_t i = 0; i < sizeof(node); ++i)
             if (node[i] != other.node[i])
@@ -64,8 +59,7 @@ struct UUID
         return time_low == other.time_low
             && time_mid == other.time_mid
             && time_hi_and_version == other.time_hi_and_version
-            && clk_seq_hi_res == other.clk_seq_hi_res
-            && clk_seq_low == other.clk_seq_low
+            && clock_seq == other.clock_seq
             && std::equal(std::begin(node), std::end(node), std::begin(other.node));
     }
 
@@ -91,7 +85,7 @@ struct Pack<UUID>
     {
         packAll(first, last,
                 value.time_low, value.time_mid, value.time_hi_and_version,
-                value.clk_seq_hi_res, value.clk_seq_low,
+                value.clock_seq,
                 value.node[0], value.node[1], value.node[2],
                 value.node[3], value.node[4], value.node[5]);
     }
@@ -101,7 +95,7 @@ struct Pack<UUID>
         UUID value;
         unpackAll(first, last,
                 value.time_low, value.time_mid, value.time_hi_and_version,
-                value.clk_seq_hi_res, value.clk_seq_low,
+                value.clock_seq,
                 value.node[0], value.node[1], value.node[2],
                 value.node[3], value.node[4], value.node[5]);
         return std::move(value);
@@ -130,8 +124,7 @@ struct hash<slick::UUID>
         slick::hash_combine(hash, value.time_low);
         slick::hash_combine(hash, value.time_mid);
         slick::hash_combine(hash, value.time_hi_and_version);
-        slick::hash_combine(hash, value.clk_seq_hi_res);
-        slick::hash_combine(hash, value.clk_seq_low);
+        slick::hash_combine(hash, value.clock_seq);
 
         for (size_t i = 0; i < sizeof(value.node); ++i)
             slick::hash_combine(hash, value.node[i]);

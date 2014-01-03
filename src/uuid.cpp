@@ -112,8 +112,7 @@ UUID(const char* first, size_t n)
     it = readHex(time_low, it, last);
     it = readHex(time_mid, it, last);
     it = readHex(time_hi_and_version, it, last);
-    it = readHex(clk_seq_hi_res, it, last);
-    it = readHex(clk_seq_low, it, last);
+    it = readHex(clock_seq, it, last);
 
     for (size_t i = 0; i < sizeof(node); ++i)
         it = readHex(node[i], it, last);
@@ -133,7 +132,7 @@ toString() const
 {
     return lockless::format("%x-%x-%x-%x%x-%x%x%x%x%x%x",
             uint32_t(time_low), uint32_t(time_mid), uint32_t(time_hi_and_version),
-            uint32_t(clk_seq_hi_res), uint32_t(clk_seq_low),
+            uint32_t(clock_seq),
             uint32_t(node[0]), uint32_t(node[1]), uint32_t(node[2]),
             uint32_t(node[3]), uint32_t(node[4]), uint32_t(node[5]));
 }
@@ -148,6 +147,9 @@ random()
 
     if (!linuxRandom(bytes, n))
         userspaceRandom(bytes);
+
+    uuid.clock_seq = (uuid.clock_seq & 0x3FFF) | 0x8000;
+    uuid.time_hi_and_version = (uuid.time_hi_and_version & 0x0FFF) | 0x4000;
 
     return std::move(uuid);
 }
