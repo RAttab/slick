@@ -59,16 +59,16 @@ BOOST_AUTO_TEST_CASE(basics)
     PassiveEndpoint provider(listenPort);
     poller.add(provider);
 
-    provider.onNewConnection = [] (ConnectionHandle conn) {
-        printf("prv: new %d\n", conn);;
+    provider.onNewConnection = [] (int fd) {
+        printf("prv: new %d\n", fd);
     };
-    provider.onLostConnection = [] (ConnectionHandle conn) {
-        printf("prv: lost %d\n", conn);;
+    provider.onLostConnection = [] (int fd) {
+        printf("prv: lost %d\n", fd);
     };
 
-    provider.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
+    provider.onPayload = [&] (int fd, Payload&& data) {
         auto msg = unpack<std::string>(data);
-        printf("prv: got(%d) %s\n", conn, msg.c_str());
+        printf("prv: got(%d) %s\n", fd, msg.c_str());
         provider.broadcast(pack("PONG"));
         pingRecv++;
     };
@@ -76,16 +76,16 @@ BOOST_AUTO_TEST_CASE(basics)
     Endpoint client;
     poller.add(client);
 
-    client.onNewConnection = [] (ConnectionHandle conn) {
-        printf("cli: new %d\n", conn);;
+    client.onNewConnection = [] (int fd) {
+        printf("cli: new %d\n", fd);
     };
-    client.onLostConnection = [] (ConnectionHandle conn) {
-        printf("cli: lost %d\n", conn);;
+    client.onLostConnection = [] (int fd) {
+        printf("cli: lost %d\n", fd);
     };
 
-    client.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
+    client.onPayload = [&] (int fd, Payload&& data) {
         auto msg = unpack<std::string>(data);
-        printf("cli: got(%d) %s\n", conn, msg.c_str());
+        printf("cli: got(%d) %s\n", fd, msg.c_str());
         pongRecv++;
     };
 
@@ -134,14 +134,14 @@ BOOST_AUTO_TEST_CASE(n_to_n)
         provPoller.add(*providers[id]);
 
         weak_ptr<PassiveEndpoint> prov(providers[id]);
-        providers[id]->onPayload = [=, &clientIdSums] (ConnectionHandle conn, Payload&& data) {
+        providers[id]->onPayload = [=, &clientIdSums] (int fd, Payload&& data) {
             clientIdSums[id] += unpack<size_t>(data);
 
             auto ptr = prov.lock();
-            ptr->send(conn, pack<size_t>(id + 1));
+            ptr->send(fd, pack<size_t>(id + 1));
         };
 
-        providers[id]->onDroppedPayload = [] (ConnectionHandle, Payload&&) {
+        providers[id]->onDroppedPayload = [] (int, Payload&&) {
             assert(false);
         };
 
@@ -160,12 +160,12 @@ BOOST_AUTO_TEST_CASE(n_to_n)
     Endpoint client;
     clientPoller.add(client);
 
-    client.onDroppedPayload = [] (ConnectionHandle, Payload&&) {
+    client.onDroppedPayload = [] (int, Payload&&) {
         assert(false);
     };
 
     std::atomic<size_t> provIdSum(0);
-    client.onPayload = [&] (ConnectionHandle, Payload&& data) {
+    client.onPayload = [&] (int, Payload&& data) {
         provIdSum += unpack<size_t>(data);
     };
 
@@ -219,13 +219,13 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
     PassiveEndpoint provider(listenPort);
     poller.add(provider);
 
-    provider.onNewConnection = [&] (ConnectionHandle conn) {
+    provider.onNewConnection = [&] (int fd) {
         gotClient = true;
-        printf("prv: new %d\n", conn);;
+        printf("prv: new %d\n", fd);
     };
-    provider.onLostConnection = [&] (ConnectionHandle conn) {
+    provider.onLostConnection = [&] (int fd) {
         lostClient = true;
-        printf("prv: lost %d\n", conn);;
+        printf("prv: lost %d\n", fd);
     };
 
     Endpoint client;
@@ -265,13 +265,13 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
         PassiveEndpoint provider(listenPort);
         poller.add(provider);
 
-        provider.onNewConnection = [&] (ConnectionHandle conn) {
+        provider.onNewConnection = [&] (int fd) {
             gotClient = true;
-            printf("prv: new %d\n", conn);;
+            printf("prv: new %d\n", fd);
         };
-        provider.onLostConnection = [&] (ConnectionHandle conn) {
+        provider.onLostConnection = [&] (int fd) {
             lostClient = true;
-            printf("prv: lost %d\n", conn);;
+            printf("prv: lost %d\n", fd);;
         };
 
         std::atomic<bool> shutdown(false);

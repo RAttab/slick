@@ -153,9 +153,9 @@ shutdown()
 
 void
 DistributedDiscovery::
-onPayload(ConnectionHandle handle, Payload&& data)
+onPayload(int fd, Payload&& data)
 {
-    auto& conn = connections[handle];
+    auto& conn = connections[fd];
     auto it = data.cbegin(), last = data.cend();
 
     if (!conn) it = onInit(conn, it, last);
@@ -256,10 +256,10 @@ retract(const std::string& key)
 
 void
 DistributedDiscovery::
-onConnect(ConnectionHandle handle)
+onConnect(int fd)
 {
-    auto& conn = connections[handle];
-    conn.handle = handle;
+    auto& conn = connections[fd];
+    conn.fd = fd;
 
     auto head = std::make_tuple(Msg::Init, Msg::Version);
 
@@ -271,15 +271,15 @@ onConnect(ConnectionHandle handle)
         conn.pendingFetch.clear();
     }
 
-    endpoint.send(handle, std::move(data));
+    endpoint.send(fd, std::move(data));
 }
 
 
 void
 DistributedDiscovery::
-onDisconnect(ConnectionHandle handle)
+onDisconnect(int fd)
 {
-    connections.erase(handle);
+    connections.erase(fd);
 }
 
 
@@ -291,7 +291,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     it = unpackAll(it, last, init, conn.version);
 
     if (init != Msg::Init) {
-        endpoint.disconnect(conn.handle);
+        endpoint.disconnect(conn.fd);
         return last;
     }
 
@@ -304,7 +304,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& key : data)
             items.emplace_back(key.first, key.second.id, myNode, keyTTL_);
 
-        endpoint.send(conn.handle, packAll(Msg::Keys, items));
+        endpoint.send(conn.fd, packAll(Msg::Keys, items));
     }
 
     if (!watches.empty()) {
@@ -315,7 +315,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
             items.emplace_back(watch.first);
 
         auto Msg = packAll(Msg::Query, myNode, items);
-        endpoint.send(conn.handle, std::move(Msg));
+        endpoint.send(conn.fd, std::move(Msg));
     }
 
     if (!nodes.empty()) {
@@ -333,7 +333,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
             items.emplace_back(node.id, node.addrs, ttl);
         }
 
-        endpoint.send(conn.handle, packAll(Msg::Nodes, items));
+        endpoint.send(conn.fd, packAll(Msg::Nodes, items));
     }
 
     return it;
@@ -401,7 +401,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty())
-        endpoint.send(conn.handle, packAll(Msg::Keys, reply));
+        endpoint.send(conn.fd, packAll(Msg::Keys, reply));
 
     return it;
 }
@@ -446,11 +446,9 @@ doFetch(const std::string& key, const UUID& id, const NodeLocation& node)
     auto socket = Socket::connect(node);
     if (!socket) return;
 
-    ConnectionHandle handle = socket.fd();
-    connections[handle].pendingFetch.emplace_back(key, id);
-
-    ConnectionHandle sameHandle = endpoint.connect(std::move(socket));
-    assert(handle == sameHandle);
+    int fd = socket.fd();
+    connections[fd].pendingFetch.emplace_back(key, id);
+    endpoint.connect(std::move(socket));
 }
 
 ConstPackIt
@@ -476,7 +474,7 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty())
-        endpoint.send(conn.handle, packAll(Msg::Data, reply));
+        endpoint.send(conn.fd, packAll(Msg::Data, reply));
 
     return it;
 }
@@ -553,11 +551,11 @@ rotateConnections()
     if (connections.size() - disconnects > targetSize)
         disconnects = connections.size() - targetSize;
 
-    std::set<ConnectionHandle> toDisconnect;
+    std::set<int> toDisconnect;
 
     if (disconnects >= connections.size()) {
         for (const auto& conn : connections)
-            toDisconnect.insert(conn.second.handle);
+            toDisconnect.insert(conn.second.fd);
     }
     else {
         for (size_t i = 0; i < disconnects; ++i) {
@@ -566,14 +564,14 @@ rotateConnections()
             auto it = connections.begin();
             std::advance(it, dist(rng));
 
-            toDisconnect.insert(it->second.handle);
+            toDisconnect.insert(it->second.fd);
         }
     }
 
     // Need to defer the call because the call could invalidate our connection
     // iterator through our onLostConnection callback.
-    for (auto conn : toDisconnect)
-        endpoint.disconnect(conn);
+    for (auto fd : toDisconnect)
+        endpoint.disconnect(fd);
 
     size_t connects = targetSize - connections.size();
     auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), connects, rng);

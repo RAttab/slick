@@ -51,18 +51,18 @@ void runProvider(Port port)
 
     PassiveEndpoint provider(port);
 
-    provider.onNewConnection = [] (ConnectionHandle conn) {
-        fprintf(stderr, "\nprv: new %d\n", conn);;
+    provider.onNewConnection = [] (int fd) {
+        fprintf(stderr, "\nprv: new %d\n", fd);;
     };
-    provider.onLostConnection = [] (ConnectionHandle conn) {
-        fprintf(stderr, "\nprv: lost %d\n", conn);;
+    provider.onLostConnection = [] (int fd) {
+        fprintf(stderr, "\nprv: lost %d\n", fd);;
     };
 
-    provider.onPayload = [&] (ConnectionHandle conn, Payload&& data) {
+    provider.onPayload = [&] (int fd, Payload&& data) {
         recv++;
-        provider.send(conn, move(data));
+        provider.send(fd, move(data));
     };
-    provider.onDroppedPayload = [&] (ConnectionHandle, Payload&&) {
+    provider.onDroppedPayload = [&] (int, Payload&&) {
         dropped++;
     };
 
@@ -92,17 +92,17 @@ void runClient(vector<string> uris)
 
     Endpoint client;
 
-    client.onNewConnection = [] (ConnectionHandle conn) {
-        fprintf(stderr, "\ncli: new %d\n", conn);;
+    client.onNewConnection = [] (int fd) {
+        fprintf(stderr, "\ncli: new %d\n", fd);;
     };
-    client.onLostConnection = [] (ConnectionHandle conn) {
-        fprintf(stderr, "\ncli: lost %d\n", conn);;
+    client.onLostConnection = [] (int fd) {
+        fprintf(stderr, "\ncli: lost %d\n", fd);;
     };
 
-    client.onPayload = [&] (ConnectionHandle, Payload&&) {
+    client.onPayload = [&] (int, Payload&&) {
         recv++;
     };
-    client.onDroppedPayload = [&] (ConnectionHandle, Payload&&) {
+    client.onDroppedPayload = [&] (int, Payload&&) {
         dropped++;
     };
 

@@ -91,13 +91,13 @@ private:
 
     struct ConnState
     {
-        ConnectionHandle handle;
+        int fd;
         uint32_t version;
         double connectionTime;
         std::vector<FetchItem> pendingFetch;
 
         ConnState() :
-            handle(0), version(0), connectionTime(lockless::wall())
+            fd(0), version(0), connectionTime(lockless::wall())
         {}
 
         operator bool() const { return version; }
@@ -179,7 +179,7 @@ private:
     std::unordered_map<std::string, SortedVector<Item> > keys;
     std::unordered_map<std::string, std::set<Watch> > watches;
     std::unordered_map<std::string, Data> data;
-    std::unordered_map<ConnectionHandle, ConnState> connections;
+    std::unordered_map<int, ConnState> connections;
 
     std::mt19937 rng;
 
@@ -199,9 +199,9 @@ private:
     size_t timerPeriod(size_t secs);
     void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);
-    void onPayload(ConnectionHandle handle, Payload&& data);
-    void onConnect(ConnectionHandle handle);
-    void onDisconnect(ConnectionHandle handle);
+    void onPayload(int fd, Payload&& data);
+    void onConnect(int fd);
+    void onDisconnect(int fd);
 
     ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);

@@ -23,7 +23,7 @@ Endpoint()
 {
     using namespace std::placeholders;
 
-    typedef void (Endpoint::*SendFn) (ConnectionHandle, Payload&&);
+    typedef void (Endpoint::*SendFn) (int, Payload&&);
     sends.onOperation = std::bind((SendFn)&Endpoint::send, this, _1, _2);
     poller.add(sends.fd());
 
@@ -31,7 +31,7 @@ Endpoint()
     broadcasts.onOperation = std::bind((BroadcastFn)&Endpoint::broadcast, this, _1);
     poller.add(broadcasts.fd());
 
-    typedef ConnectionHandle (Endpoint::*ConnectFn) (Socket&& socket);
+    typedef void (Endpoint::*ConnectFn) (Socket&& socket);
     connects.onOperation = std::bind((ConnectFn)&Endpoint::connect, this, _1);
     poller.add(connects.fd());
 
@@ -68,7 +68,7 @@ shutdown()
 template<typename Payload>
 void
 Endpoint::
-dropPayload(ConnectionHandle conn, Payload&& data) const
+dropPayload(int fd, Payload&& data) const
 {
     if (!onDroppedPayload) return;
 
@@ -76,7 +76,7 @@ dropPayload(ConnectionHandle conn, Payload&& data) const
     // before being moved for the callback.
     Payload tmpData = std::forward<Payload>(data);
 
-    onDroppedPayload(conn, std::move(tmpData));
+    onDroppedPayload(fd, std::move(tmpData));
 }
 
 
@@ -118,45 +118,47 @@ poll(int timeoutMs)
 }
 
 
-ConnectionHandle
+void
 Endpoint::
 connect(Socket&& socket)
 {
-    ConnectionHandle handle = socket.fd();
-
     if (!isPollThread()) {
         connects.defer(std::move(socket));
-        return handle;
+        return;
     }
 
-    poller.add(socket.fd(), EPOLLET | EPOLLIN | EPOLLOUT);
-
     int fd = socket.fd();
+    poller.add(fd, EPOLLET | EPOLLIN | EPOLLOUT);
 
     ConnectionState connection;
     connection.socket = std::move(socket);
-    connections[connection.socket.fd()] = std::move(connection);
+    connections[fd] = std::move(connection);
 
     if (onNewConnection) onNewConnection(fd);
-    return handle;
 }
 
-ConnectionHandle
+int
 Endpoint::
 connect(const Address& addr)
 {
     auto socket = Socket::connect(addr);
-    if (socket) return connect(std::move(socket));
-    return 0;
+    if (!socket) return 0;
+
+    int fd = socket.fd();
+    connect(std::move(socket));
+    return fd;
 }
 
-ConnectionHandle
+int
 Endpoint::
 connect(const std::vector<Address>& addrs)
 {
     auto socket = Socket::connect(addrs);
-    if (socket) return connect(std::move(socket));
-    return 0;
+    if (!socket) return 0;
+
+    int fd = socket.fd();
+    connect(std::move(socket));
+    return fd;
 }
 
 void

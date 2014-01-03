@@ -25,8 +25,6 @@ namespace slick {
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
-typedef int ConnectionHandle;
-
 struct Endpoint
 {
     Endpoint();
@@ -36,11 +34,11 @@ struct Endpoint
     Endpoint& operator=(const Endpoint&) = delete;
 
 
-    typedef std::function<void(ConnectionHandle h)> ConnectionFn;
+    typedef std::function<void(int fd)> ConnectionFn;
     ConnectionFn onNewConnection;
     ConnectionFn onLostConnection;
 
-    typedef std::function<void(ConnectionHandle h, Payload&& d)> PayloadFn;
+    typedef std::function<void(int fd, Payload&& d)> PayloadFn;
     PayloadFn onPayload;
     PayloadFn onDroppedPayload;
 
@@ -49,10 +47,10 @@ struct Endpoint
     void poll(int timeoutMs = 0);
     void shutdown();
 
-    void send(ConnectionHandle client, Payload&& data);
-    void send(ConnectionHandle client, const Payload& data)
+    void send(int fd, Payload&& data);
+    void send(int fd, const Payload& data)
     {
-        send(client, Payload(data));
+        send(fd, Payload(data));
     }
 
     void broadcast(Payload&& data);
@@ -63,11 +61,11 @@ struct Endpoint
 
     // \todo Would be nice to have multicast support.
 
-    ConnectionHandle connect(Socket&& socket);
-    ConnectionHandle connect(const Address& addr);
-    ConnectionHandle connect(const std::vector<Address>& addrs);
+    void connect(Socket&& socket);
+    int connect(const Address& addr);
+    int connect(const std::vector<Address>& addrs);
 
-    void disconnect(ConnectionHandle handle);
+    void disconnect(int fd);
 
 protected:
 
@@ -93,7 +91,7 @@ private:
     bool sendTo(ConnectionState& conn, Payload&& data, size_t offset = 0);
 
     template<typename Payload>
-    void dropPayload(ConnectionHandle h, Payload&& payload) const;
+    void dropPayload(int h, Payload&& payload) const;
 
     void flushQueue(int fd);
     void onOperation(Operation&& op);
@@ -120,7 +118,7 @@ private:
         std::vector<Payload> recvQueue;
     };
 
-    std::unordered_map<ConnectionHandle, ConnectionState> connections;
+    std::unordered_map<int, ConnectionState> connections;
 
     enum { SendSize = 1 << 6 };
     Defer<SendSize, int, Payload> sends;
@@ -158,20 +156,20 @@ private:
 struct Connection
 {
     Connection(Endpoint& endpoint, const Address& addr) :
-        endpoint(endpoint), conn(endpoint.connect(addr))
+        endpoint(endpoint), fd(endpoint.connect(addr))
     {}
 
     Connection(Endpoint& endpoint, const std::vector<Address>& addrs) :
-        endpoint(endpoint), conn(endpoint.connect(addrs))
+        endpoint(endpoint), fd(endpoint.connect(addrs))
     {}
 
-    ~Connection() { endpoint.disconnect(conn); }
+    ~Connection() { endpoint.disconnect(fd); }
 
-    operator bool() const { return !conn; }
+    operator bool() const { return !fd; }
 
 private:
     Endpoint& endpoint;
-    ConnectionHandle conn;
+    int fd;
 };
 
 
