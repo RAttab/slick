@@ -19,23 +19,24 @@ namespace slick {
 
 
 /******************************************************************************/
-/* NODE                                                                       */
+/* UTILS                                                                      */
 /******************************************************************************/
 
-bool
-DistributedDiscovery::Node::
-operator<(const Node& other) const
+template<typename It, typename Rng>
+It pickRandom(It it, It last, Rng& rng)
 {
-    size_t n = std::min(addrs.size(), other.addrs.size());
-    for (size_t i = 0; i < n; ++i) {
-        if (addrs[i] < other.addrs[i]) return true;
-        if (other.addrs[i] < addrs[i]) return false;
-    }
+    std::uniform_int_distribution<size_t> dist(std::distance(it, last) - 1);
+    std::advance(it, dist(rng));
+    return it;
+}
 
-    if (addrs.size() < other.addrs.size()) return true;
-    if (other.addrs.size() < addrs.size()) return false;
-
-    return expiration < other.expiration;
+template<typename T, typename It, typename Rng>
+std::set<T> pickRandom(It first, It last, size_t n, Rng& rng)
+{
+    std::set<T> result;
+    while (result.size() < n)
+        result.insert(*pickRandom(first, last, rng));
+    return std::move(result);
 }
 
 
@@ -52,54 +53,6 @@ Watch(WatchFn watch) : watch(std::move(watch))
 
 
 /******************************************************************************/
-/* LIST                                                                       */
-/******************************************************************************/
-
-template<typename T>
-auto
-DistributedDiscovery::List<T>::
-find(const T& value) -> iterator
-{
-    auto res = std::equal_range(list.begin(), list.end(), value);
-    return res.first == res.second ? list.end() : res.first;
-}
-
-template<typename T>
-bool
-DistributedDiscovery::List<T>::
-count(const T& value) const
-{
-    auto res = std::equal_range(list.begin(), list.end(), value);
-    return res.first != res.second;
-}
-
-template<typename T>
-bool
-DistributedDiscovery::List<T>::
-insert(T value)
-{
-    if (count(value)) return false;
-
-    list.emplace_back(std::move(value));
-    std::sort(list.begin(), list.end());
-
-    return true;
-}
-
-template<typename T>
-bool
-DistributedDiscovery::List<T>::
-erase(const T& value)
-{
-    auto res = std::equal_range(list.begin(), list.end(), value);
-    if (res.first == res.second) return false;
-
-    list.erase(res.first);
-    return true;
-}
-
-
-/******************************************************************************/
 /* PROTOCOL                                                                   */
 /******************************************************************************/
 
@@ -112,10 +65,11 @@ typedef uint16_t Type;
 static constexpr Type Keys  = 1;
 static constexpr Type Query = 2;
 static constexpr Type Nodes = 3;
-static constexpr Type Get   = 4;
+static constexpr Type Fetch = 4;
 static constexpr Type Data  = 5;
 
 } // namespace msg
+
 
 
 /******************************************************************************/
@@ -135,10 +89,17 @@ DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     keyTTL_(DefaultKeyTTL),
     nodeTTL_(DefaultNodeTTL),
+    myId(UUID::random()),
     rng(lockless::wall()),
     endpoint(port),
     timer(timerPeriod()) // \todo add randomness
 {
+    myNode = endpoint.interfaces();
+
+    double now = lockless::wall();
+    for (auto& addr : seed)
+        nodes.emplace(UUID::random(), NodeLocation({addr}), SeedTTL, now);
+
     using namespace std::placeholders;
 
     endpoint.onPayload = bind(&DistributedDiscovery::onPayload, this, _1, _2);
@@ -162,10 +123,8 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
 
     timer.onTimer = bind(&DistributedDiscovery::onTimer, this, _1);
     poller.add(timer);
-
-    for (auto& addr : seed)
-        nodes.insert(Node({ addr }, nodeTTL_));
 }
+
 
 void
 DistributedDiscovery::
@@ -204,7 +163,7 @@ onPayload(ConnectionHandle handle, Payload&& data)
         case msg::Keys:  it = onKeys(conn, it, last); break;
         case msg::Query: it = onQuery(conn, it, last); break;
         case msg::Nodes: it = onNodes(conn, it, last); break;
-        case msg::Get:   it = onGet(conn, it, last); break;
+        case msg::Fetch: it = onFetch(conn, it, last); break;
         case msg::Data:  it = onData(conn, it, last); break;
         default: assert(false);
         };
@@ -233,13 +192,13 @@ discover(const std::string& key, Watch&& watch)
 
     if (!watches.count(key)) {
         std::vector<QueryItem> items = { key };
-        endpoint.broadcast(packAll(msg::Query, endpoint.interfaces(), items));
+        endpoint.broadcast(packAll(msg::Query, myNode, items));
     }
 
     watches[key].insert(std::move(watch));
 
     for (const auto& node : keys[key])
-        doGet(key, node.addrs);
+        doFetch(key, node.id, node.addrs);
 }
 
 void
@@ -268,13 +227,14 @@ publish(const std::string& key, Payload&& data)
         return;
     }
 
-    this->data[key] = std::move(data);
+    this->data[key] = Data(std::move(data));
 
     std::vector<KeyItem> items;
-    items.emplace_back(key, endpoint.interfaces(), keyTTL_);
+    items.emplace_back(key, myId, myNode, keyTTL_);
 
     endpoint.broadcast(packAll(msg::Keys, items));
 }
+
 
 void
 DistributedDiscovery::
@@ -300,14 +260,15 @@ onConnect(ConnectionHandle handle)
 
     Payload data;
 
-    if (conn.pendingGets.empty()) data = pack(head);
+    if (conn.pendingFetch.empty()) data = pack(head);
     else {
-        data = packAll(head, msg::Get, conn.pendingGets);
-        conn.pendingGets.clear();
+        data = packAll(head, msg::Fetch, conn.pendingFetch);
+        conn.pendingFetch.clear();
     }
 
     endpoint.send(handle, std::move(data));
 }
+
 
 void
 DistributedDiscovery::
@@ -315,6 +276,7 @@ onDisconnect(ConnectionHandle handle)
 {
     connections.erase(handle);
 }
+
 
 ConstPackIt
 DistributedDiscovery::
@@ -335,7 +297,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         items.reserve(data.size());
 
         for (const auto& key : data)
-            items.emplace_back(key.first, endpoint.interfaces(), keyTTL_);
+            items.emplace_back(key.first, key.second.id, myNode, keyTTL_);
 
         endpoint.send(conn.handle, packAll(msg::Keys, items));
     }
@@ -347,22 +309,23 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& watch : watches)
             items.emplace_back(watch.first);
 
-        auto msg = packAll(msg::Query, endpoint.interfaces(), items);
+        auto msg = packAll(msg::Query, myNode, items);
         endpoint.send(conn.handle, std::move(msg));
     }
 
     if (!nodes.empty()) {
         double now = lockless::wall();
-        size_t picks = lockless::log2(nodes.size());
+        size_t numPicks = lockless::log2(nodes.size());
 
         std::vector<NodeItem> items;
-        items.reserve(picks + 1);
-        items.emplace_back(endpoint.interfaces(), nodeTTL_);
+        items.reserve(numPicks + 1);
+        items.emplace_back(myId, myNode, nodeTTL_);
 
-        for (const auto& node : nodes.pickRandom(rng, picks)) {
+        auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), numPicks, rng);
+        for (const auto& node : picks) {
             size_t ttl = node.ttl(now);
             if (!ttl) continue;
-            items.emplace_back(node.addrs, ttl);
+            items.emplace_back(node.id, node.addrs, ttl);
         }
 
         endpoint.send(conn.handle, packAll(msg::Nodes, items));
@@ -371,6 +334,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     return it;
 }
 
+
 ConstPackIt
 DistributedDiscovery::
 onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
@@ -378,29 +342,27 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
     std::vector<KeyItem> items;
     it = unpack(items, it, last);
 
-    double now = lockless::wall();
     std::vector<KeyItem> toForward;
     toForward.reserve(items.size());
 
+    double now = lockless::wall();
+
     for (auto& item : items) {
-        std::string key;
-        NodeLocation node;
-        size_t ttl;
-        std::tie(key, node, ttl) = std::move(item);
+        std::string key = std::move(std::get<0>(item));
+        Item value(std::move(item), now);
 
         auto& list = keys[key];
 
-        Node value(node, ttl, now);
         auto it = list.find(value);
         if (it != list.end()) {
-            it->setTTL(ttl, now);
+            it->setTTL(value.ttl(now), now);
             continue;
         }
 
-        list.insert(value);
-        toForward.emplace_back(key, node, ttl);
+        if (watches.count(key)) doFetch(key, value.id, value.addrs);
+        toForward.emplace_back(key, value.id, value.addrs, value.ttl(now));
 
-        if (watches.count(key)) doGet(key, node);
+        list.insert(std::move(value));
     }
 
     if (!toForward.empty())
@@ -421,13 +383,15 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<KeyItem> reply;
     reply.reserve(items.size());
 
+    double now = lockless::wall();
+
     for (const auto& key : items) {
         auto it = keys.find(key);
         if (it == keys.end()) continue;
 
         for (const auto& node : it->second) {
-            if (!node.ttl()) continue;
-            reply.emplace_back(key, node.addrs, node.ttl());
+            if (!node.ttl(now)) continue;
+            reply.emplace_back(key, node.id, node.addrs, node.ttl(now));
         }
     }
 
@@ -437,6 +401,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     return it;
 }
 
+
 ConstPackIt
 DistributedDiscovery::
 onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
@@ -444,25 +409,22 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
     std::vector<NodeItem> items;
     it = unpack(items, it, last);
 
-    double now = lockless::wall();
     std::vector<NodeItem> toForward;
     toForward.reserve(items.size());
 
-    for (auto& item : items) {
-        NodeLocation node;
-        size_t ttl;
-        std::tie(node, ttl) = std::move(item);
+    double now = lockless::wall();
 
-        Node value(node, ttl, now);
+    for (auto& item : items) {
+        Item value(std::move(item), now);
 
         auto it = nodes.find(value);
         if (it != nodes.end()) {
-            it->setTTL(ttl, now);
+            it->setTTL(value.ttl(now), now);
             continue;
         }
 
-        nodes.insert(value);
-        toForward.emplace_back(node, ttl);
+        toForward.emplace_back(value.id, value.addrs, value.ttl(now));
+        nodes.insert(std::move(value));
     }
 
     if (!toForward.empty())
@@ -471,35 +433,41 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
     return it;
 }
 
+
 void
 DistributedDiscovery::
-doGet(const std::string& key, const std::vector<Address>& addrs)
+doFetch(const std::string& key, const UUID& id, const NodeLocation& node)
 {
-    auto socket = Socket::connect(addrs);
+    auto socket = Socket::connect(node);
     if (!socket) return;
 
     ConnectionHandle handle = socket.fd();
-    connections[handle].pendingGets.emplace_back(key);
+    connections[handle].pendingFetch.emplace_back(key, id);
 
-    ConnectionHandle otherHandle = endpoint.connect(addrs);
-    assert(handle == otherHandle);
+    ConnectionHandle sameHandle = endpoint.connect(std::move(socket));
+    assert(handle == sameHandle);
 }
 
 ConstPackIt
 DistributedDiscovery::
-onGet(ConnState& conn, ConstPackIt it, ConstPackIt last)
+onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
-    std::vector<std::string> items;
+    std::vector<FetchItem> items;
     it = unpack(items, it, last);
 
     std::vector<DataItem> reply;
     reply.reserve(items.size());
 
-    for (const auto& key : items) {
-        auto it = data.find(key);
-        if (it == data.end()) continue;
+    for (auto& item : items) {
+        std::string key;
+        UUID id;
+        std::tie(key, id) = std::move(item);
 
-        reply.emplace_back(key, it->second);
+        auto it = data.find(key);
+        if (it == data.end() || it->second.id != id)
+            continue;
+
+        reply.emplace_back(key, it->second.data);
     }
 
     if (!reply.empty())
@@ -536,39 +504,38 @@ void
 DistributedDiscovery::
 onTimer(size_t)
 {
-    expireNodes(nodes);
-    expireKeys();
+    double now = lockless::wall();
+
+    while(!nodes.empty() && expireItem(nodes, now));
+    while(!keys.empty() && expireKeys(now));
     rotateConnections();
 }
 
-void
+bool
 DistributedDiscovery::
-expireNodes(List<Node>& list)
+expireItem(SortedVector<Item>& list, double now)
 {
-    while (!list.empty()) {
-        const auto& node = list.pickRandom(rng);
-        if (node.ttl()) return;
-        list.erase(node);
-    }
+    assert(!list.empty());
+
+    auto it = pickRandom(list.begin(), list.end(), rng);
+    if (it->ttl(now)) return false;
+
+    list.erase(it);
+    return true;
 }
 
-void
+
+bool
 DistributedDiscovery::
-expireKeys()
+expireKeys(double now)
 {
-    std::vector<std::string> toRemove;
+    assert(!keys.empty());
 
-    for (auto& key : keys) {
-        auto& list = key.second;
+    auto it = pickRandom(keys.begin(), keys.end(), rng);
+    if (!expireItem(it->second, now)) return false;
 
-        expireNodes(list);
-        if (!list.empty()) continue;
-
-        toRemove.emplace_back(key.first);
-    }
-
-    for (const auto& key : toRemove)
-        keys.erase(key);
+    if (it->second.empty()) keys.erase(it);
+    return true;
 }
 
 void
@@ -576,7 +543,7 @@ DistributedDiscovery::
 rotateConnections()
 {
     size_t targetSize = lockless::log2(nodes.size());
-    size_t disconnects =lockless::log2(targetSize);
+    size_t disconnects = lockless::log2(targetSize);
 
     if (connections.size() - disconnects > targetSize)
         disconnects = connections.size() - targetSize;
@@ -604,7 +571,8 @@ rotateConnections()
         endpoint.disconnect(conn);
 
     size_t connects = targetSize - connections.size();
-    for (const auto& node : nodes.pickRandom(rng, connects))
+    auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), connects, rng);
+    for (const auto& node : picks)
         endpoint.connect(node.addrs);
 }
 

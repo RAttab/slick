@@ -11,6 +11,8 @@
 #include "poll.h"
 #include "defer.h"
 #include "timer.h"
+#include "uuid.h"
+#include "sorted_vector.h"
 #include "lockless/tm.h"
 
 #include <set>
@@ -54,7 +56,8 @@ struct DistributedDiscovery : public Discovery
     enum {
         DefaultPort = 18888,
 
-        DefaultKeyTTL = 60 * 10,
+        SeedTTL        = 60 * 60,
+        DefaultKeyTTL  = 60 * 60 * 1,
         DefaultNodeTTL = 60 * 60 * 8,
     };
 
@@ -78,17 +81,17 @@ private:
 
     typedef std::vector<Address> NodeLocation;
     typedef std::string QueryItem;
-    typedef std::tuple<NodeLocation, size_t> NodeItem;
+    typedef std::tuple<std::string, UUID> FetchItem;
     typedef std::tuple<std::string, Payload> DataItem;
-    typedef std::tuple<std::string, NodeLocation, size_t> KeyItem;
-
+    typedef std::tuple<UUID, NodeLocation, size_t> NodeItem;
+    typedef std::tuple<std::string, UUID, NodeLocation, size_t> KeyItem;
 
     struct ConnState
     {
         ConnectionHandle handle;
         uint32_t version;
         double connectionTime;
-        std::vector<std::string> pendingGets;
+        std::vector<FetchItem> pendingFetch;
 
         ConnState() :
             handle(0), version(0), connectionTime(lockless::wall())
@@ -98,17 +101,29 @@ private:
     };
 
 
-    struct Node
+    struct Item
     {
+        UUID id;
         NodeLocation addrs;
         double expiration;
 
-        Node() : expiration(0) {}
-        Node(NodeLocation addrs, size_t ttl, double now = lockless::wall()) :
-            addrs(std::move(addrs)), expiration(now + ttl)
-        {
-            std::sort(addrs.begin(), addrs.end());
-        }
+        Item() : expiration(0) {}
+
+        Item(KeyItem&& item, double now = lockless::wall()) :
+            id(std::move(std::get<1>(item))),
+            addrs(std::move(std::get<2>(item))),
+            expiration(now + std::get<3>(item))
+        {}
+
+        Item(NodeItem&& item, double now = lockless::wall()) :
+            id(std::move(std::get<0>(item))),
+            addrs(std::move(std::get<1>(item))),
+            expiration(now + std::get<2>(item))
+        {}
+
+        Item(UUID id, NodeLocation addrs, size_t ttl, double now = lockless::wall()) :
+            id(std::move(id)), addrs(std::move(addrs)), expiration(now + ttl)
+        {}
 
         size_t ttl(double now = lockless::wall()) const
         {
@@ -122,7 +137,18 @@ private:
             expiration = now + ttl;
         }
 
-        bool operator<(const Node& other) const;
+        bool operator<(const Item& other) const { return id < other.id; }
+    };
+
+    struct Data
+    {
+        UUID id;
+        Payload data;
+
+        Data() {}
+        explicit Data(Payload data) :
+            id(UUID::random()), data(std::move(data))
+        {}
     };
 
 
@@ -140,58 +166,16 @@ private:
     };
 
 
-    template<typename T>
-    struct List
-    {
-        typedef std::vector<Node>::iterator iterator;
-        typedef std::vector<Node>::const_iterator const_iterator;
-
-        size_t size() const { return list.size(); }
-        bool empty() const { return list.empty(); }
-
-        iterator find(const T& value);
-        bool count(const T& value) const;
-        bool insert(T value);
-        bool erase(const T& value);
-
-        iterator begin() { return list.begin(); }
-        const_iterator cbegin() const { return list.cbegin(); }
-
-        iterator end() { return list.end(); }
-        const_iterator cend() const { return list.cend(); }
-
-        template<typename Rng>
-        const T& pickRandom(Rng& rng) const
-        {
-            std::uniform_int_distribution<size_t> dist(0, list.size() - 1);
-            return list[dist(rng)];
-        }
-
-        template<typename Rng>
-        std::vector<T> pickRandom(Rng& rng, size_t count) const
-        {
-            count = std::min(count, list.size());
-            std::set<T> result;
-
-            for (size_t i = 0; i < count; ++i)
-                while (!result.insert(pickRandom(rng)).second);
-
-            return std::vector<T>(result.begin(), result.end());
-        }
-
-    private:
-        std::vector<Node> list;
-    };
-
-
     size_t keyTTL_;
     size_t nodeTTL_;
 
+    UUID myId;
+    NodeLocation myNode;
 
-    List<Node> nodes;
-    std::unordered_map<std::string, List<Node> > keys;
+    SortedVector<Item> nodes;
+    std::unordered_map<std::string, SortedVector<Item> > keys;
     std::unordered_map<std::string, std::set<Watch> > watches;
-    std::unordered_map<std::string, Payload> data;
+    std::unordered_map<std::string, Data> data;
     std::unordered_map<ConnectionHandle, ConnState> connections;
 
     std::mt19937 rng;
@@ -221,12 +205,12 @@ private:
     ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onQuery(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onNodes(ConnState& conn, ConstPackIt first, ConstPackIt last);
-    ConstPackIt onGet  (ConnState& conn, ConstPackIt first, ConstPackIt last);
+    ConstPackIt onFetch(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
-    void doGet(const std::string& key, const NodeLocation& node);
-    void expireNodes(List<Node>&);
-    void expireKeys();
+    void doFetch(const std::string& key, const UUID& id, const NodeLocation& node);
+    bool expireItem(SortedVector<Item>& list, double now);
+    bool expireKeys(double now);
     void rotateConnections();
 
 };
