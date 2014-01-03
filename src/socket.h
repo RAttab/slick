@@ -176,8 +176,9 @@ private:
 
 
 /******************************************************************************/
-/* INTERFACES                                                                 */
+/* NETWORK INTERFACES                                                         */
 /******************************************************************************/
+
 std::vector<Address> networkInterfaces(bool excludeLoopback = false);
 
 } // slick
