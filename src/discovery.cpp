@@ -56,7 +56,7 @@ Watch(WatchFn watch) : watch(std::move(watch))
 /* PROTOCOL                                                                   */
 /******************************************************************************/
 
-namespace msg {
+namespace Msg {
 
 static const std::string Init =  "_slick_disc_";
 static constexpr uint32_t Version = 1;
@@ -68,7 +68,7 @@ static constexpr Type Nodes = 3;
 static constexpr Type Fetch = 4;
 static constexpr Type Data  = 5;
 
-} // namespace msg
+} // namespace Msg
 
 
 
@@ -82,7 +82,7 @@ timerPeriod()
 {
     enum { BasePeriod = 60 };
     size_t min = BasePeriod / 2, max = min + BasePeriod;
-    return std::uniform_int_distribution<size_t> dist(min, max)(rng);
+    return std::uniform_int_distribution<size_t>(min, max)(rng);
 }
 
 DistributedDiscovery::
@@ -156,15 +156,15 @@ onPayload(ConnectionHandle handle, Payload&& data)
     if (!conn) it = onInit(conn, it, last);
 
     while (it != last) {
-        msg::Type type;
+        Msg::Type type;
         it = unpack(type, it, last);
 
         switch(type) {
-        case msg::Keys:  it = onKeys(conn, it, last); break;
-        case msg::Query: it = onQuery(conn, it, last); break;
-        case msg::Nodes: it = onNodes(conn, it, last); break;
-        case msg::Fetch: it = onFetch(conn, it, last); break;
-        case msg::Data:  it = onData(conn, it, last); break;
+        case Msg::Keys:  it = onKeys(conn, it, last); break;
+        case Msg::Query: it = onQuery(conn, it, last); break;
+        case Msg::Nodes: it = onNodes(conn, it, last); break;
+        case Msg::Fetch: it = onFetch(conn, it, last); break;
+        case Msg::Data:  it = onData(conn, it, last); break;
         default: assert(false);
         };
     }
@@ -192,7 +192,7 @@ discover(const std::string& key, Watch&& watch)
 
     if (!watches.count(key)) {
         std::vector<QueryItem> items = { key };
-        endpoint.broadcast(packAll(msg::Query, myNode, items));
+        endpoint.broadcast(packAll(Msg::Query, myNode, items));
     }
 
     watches[key].insert(std::move(watch));
@@ -232,7 +232,7 @@ publish(const std::string& key, Payload&& data)
     std::vector<KeyItem> items;
     items.emplace_back(key, myId, myNode, keyTTL_);
 
-    endpoint.broadcast(packAll(msg::Keys, items));
+    endpoint.broadcast(packAll(Msg::Keys, items));
 }
 
 
@@ -256,13 +256,13 @@ onConnect(ConnectionHandle handle)
     auto& conn = connections[handle];
     conn.handle = handle;
 
-    auto head = std::make_tuple(msg::Init, msg::Version);
+    auto head = std::make_tuple(Msg::Init, Msg::Version);
 
     Payload data;
 
     if (conn.pendingFetch.empty()) data = pack(head);
     else {
-        data = packAll(head, msg::Fetch, conn.pendingFetch);
+        data = packAll(head, Msg::Fetch, conn.pendingFetch);
         conn.pendingFetch.clear();
     }
 
@@ -285,12 +285,12 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::string init;
     it = unpackAll(it, last, init, conn.version);
 
-    if (init != msg::Init) {
+    if (init != Msg::Init) {
         endpoint.disconnect(conn.handle);
         return last;
     }
 
-    assert(conn.version == msg::Version);
+    assert(conn.version == Msg::Version);
 
     if (!data.empty()) {
         std::vector<KeyItem> items;
@@ -299,7 +299,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& key : data)
             items.emplace_back(key.first, key.second.id, myNode, keyTTL_);
 
-        endpoint.send(conn.handle, packAll(msg::Keys, items));
+        endpoint.send(conn.handle, packAll(Msg::Keys, items));
     }
 
     if (!watches.empty()) {
@@ -309,8 +309,8 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& watch : watches)
             items.emplace_back(watch.first);
 
-        auto msg = packAll(msg::Query, myNode, items);
-        endpoint.send(conn.handle, std::move(msg));
+        auto Msg = packAll(Msg::Query, myNode, items);
+        endpoint.send(conn.handle, std::move(Msg));
     }
 
     if (!nodes.empty()) {
@@ -328,7 +328,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
             items.emplace_back(node.id, node.addrs, ttl);
         }
 
-        endpoint.send(conn.handle, packAll(msg::Nodes, items));
+        endpoint.send(conn.handle, packAll(Msg::Nodes, items));
     }
 
     return it;
@@ -366,7 +366,7 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
     }
 
     if (!toForward.empty())
-        endpoint.broadcast(packAll(msg::Keys, toForward));
+        endpoint.broadcast(packAll(Msg::Keys, toForward));
 
     return it;
 }
@@ -396,7 +396,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty())
-        endpoint.send(conn.handle, packAll(msg::Keys, reply));
+        endpoint.send(conn.handle, packAll(Msg::Keys, reply));
 
     return it;
 }
@@ -428,7 +428,7 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
     }
 
     if (!toForward.empty())
-        endpoint.broadcast(packAll(msg::Nodes, toForward));
+        endpoint.broadcast(packAll(Msg::Nodes, toForward));
 
     return it;
 }
@@ -471,7 +471,7 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty())
-        endpoint.send(conn.handle, packAll(msg::Data, reply));
+        endpoint.send(conn.handle, packAll(Msg::Data, reply));
 
     return it;
 }
