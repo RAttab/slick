@@ -8,6 +8,7 @@
 #pragma once
 
 #include "endpoint.h"
+#include "pack.h"
 #include "poll.h"
 #include "defer.h"
 #include "timer.h"
@@ -200,7 +201,6 @@ private:
     void onConnect(ConnectionHandle handle);
     void onDisconnect(ConnectionHandle handle);
 
-    typedef Payload::const_iterator ConstPackIt; // Don't want to include pack.h
     ConstPackIt onInit (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onKeys (ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onQuery(ConnState& conn, ConstPackIt first, ConstPackIt last);
