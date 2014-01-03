@@ -63,7 +63,7 @@ struct Endpoint
 
     // \todo Would be nice to have multicast support.
 
-
+    ConnectionHandle connect(Socket&& socket);
     ConnectionHandle connect(const Address& addr);
     ConnectionHandle connect(const std::vector<Address>& addrs);
 
@@ -71,7 +71,6 @@ struct Endpoint
 
 protected:
 
-    ConnectionHandle connect(Socket&& socket);
     virtual void onPollEvent(struct epoll_event&)
     {
         throw std::logic_error("unknown epoll event");
