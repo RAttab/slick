@@ -82,6 +82,7 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 install(
     FILES
     src/utils.h
+    src/uuid.h
     src/queue.h
     src/poll.h
     src/notify.h
@@ -99,6 +100,7 @@ install(
 add_library(
     slick
     SHARED
+    src/uuid.cpp
     src/poll.cpp
     src/notify.cpp
     src/timer.cpp
