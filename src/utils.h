@@ -74,4 +74,22 @@ inline void hash_combine(size_t& seed, const T& value)
 }
 
 
+/******************************************************************************/
+/* GUARD                                                                      */
+/******************************************************************************/
+
+template<typename Fn>
+struct GuardFn
+{
+    GuardFn(Fn fn) : fn(std::move(fn)) {}
+    ~GuardFn() { fn(); }
+
+private:
+    Fn fn;
+};
+
+template<typename Fn>
+GuardFn<Fn> guard(Fn fn) { return GuardFn<Fn>(std::move(fn)); }
+
+
 } // namespace slick
