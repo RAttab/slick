@@ -8,6 +8,7 @@
 
 #include "discovery.h"
 #include "pack.h"
+#include "stream.h"
 #include "lockless/bits.h"
 
 #include <set>
@@ -22,24 +23,6 @@ namespace slick {
 /******************************************************************************/
 /* DEBUG                                                                      */
 /******************************************************************************/
-/** This debug crap got a bit out of hand. I blame big government. */
-
-namespace {
-
-template<typename Arg, typename... Rest>
-void streamAll(std::ostream&, const Arg&, const Rest&...);
-
-template<typename T>
- std::ostream& operator<<(std::ostream&, const std::vector<T>&);
-
-template<typename T>
- std::ostream& operator<<(std::ostream&, const std::set<T>&);
-
-template<typename... Args>
-std::ostream& operator<<(std::ostream&, const std::tuple<Args...>&);
-
-} // namespace anonymous
-
 
 // for the friend crap to work this needs to be outside the anon namespace.
 std::ostream& operator<<(
@@ -50,7 +33,6 @@ std::ostream& operator<<(
     stream << ">";
     return stream;
 }
-
 
 namespace {
 
@@ -71,56 +53,6 @@ std::ostream& operator<<(std::ostream& stream, const Address& addr)
 {
     stream << addr.toString();
     return stream;
-}
-
-
-template<typename TupleT, size_t... S>
-std::ostream& streamTuple(std::ostream& stream, const TupleT& value, Seq<S...>)
-{
-    stream << "<";
-    streamAll(stream, std::get<S>(value)...);
-    stream << ">";
-    return stream;
-}
-
-template<typename... Args>
-std::ostream& operator<<(std::ostream& stream, const std::tuple<Args...>& value)
-{
-    streamTuple(stream, value, typename GenSeq<sizeof...(Args)>::type());
-    return stream;
-}
-
-
-template<typename T>
-std::ostream& operator<<(std::ostream& stream, const std::vector<T>& vec)
-{
-    stream << "[ ";
-    for (const auto& val : vec) stream << val << " ";
-    stream << "]";
-    return stream;
-}
-
-
-template<typename T>
-std::ostream& operator<<(std::ostream& stream, const std::set<T>& vec)
-{
-    stream << "[ ";
-    for (const auto& val : vec) stream << val << " ";
-    stream << "]";
-    return stream;
-}
-
-
-void streamAll(std::ostream&) {}
-
-template<typename Arg, typename... Rest>
-void streamAll(std::ostream& stream, const Arg& arg, const Rest&... rest)
-{
-    stream << arg;
-    if (!sizeof...(rest)) return;
-
-    stream << " ";
-    streamAll(stream, rest...);
 }
 
 
@@ -215,7 +147,7 @@ static constexpr Type Data  = 5;
 /******************************************************************************/
 
 DistributedDiscovery::
-DistributedDiscovery(const std::vector<Address>& seed, Port port) :
+DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
     ttl_(DefaultTTL),
     myId(UUID::random()),
     rng(lockless::wall()),
@@ -226,7 +158,7 @@ DistributedDiscovery(const std::vector<Address>& seed, Port port) :
     for (auto& addr : myNode) addr.port = port;
 
     double now = lockless::wall();
-    for (auto& addr : seed)
+    for (auto& addr : seeds)
         nodes.emplace(UUID::random(), NodeLocation({addr}), DefaultTTL, now);
 
     using namespace std::placeholders;

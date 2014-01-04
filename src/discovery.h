@@ -68,7 +68,7 @@ struct DistributedDiscovery : public Discovery
     typedef std::vector<Address> NodeLocation;
 
     DistributedDiscovery(
-            const std::vector<Address>& seed, Port port = DefaultPort);
+            const std::vector<Address>& seeds, Port port = DefaultPort);
 
     virtual int fd() const { return poller.fd(); }
     virtual void poll(size_t timeoutMs = 0);
