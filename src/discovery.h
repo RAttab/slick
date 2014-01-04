@@ -62,6 +62,7 @@ struct DistributedDiscovery : public Discovery
         DefaultPeriod = 60 * 1,
         DefaultTTL    = 60 * 60 * 8,
     };
+    typedef std::vector<Address> NodeLocation;
 
     DistributedDiscovery(
             const std::vector<Address>& seed, Port port = DefaultPort);
@@ -79,9 +80,11 @@ struct DistributedDiscovery : public Discovery
     void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
     void setPeriod(size_t sec = DefaultPeriod);
 
+    const UUID& id() const { return myId; }
+    const NodeLocation& node() const { return myNode; }
+
 private:
 
-    typedef std::vector<Address> NodeLocation;
     typedef std::string QueryItem;
     typedef std::tuple<std::string, UUID> FetchItem;
     typedef std::tuple<std::string, Payload> DataItem;
