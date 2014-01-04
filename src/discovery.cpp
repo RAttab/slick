@@ -436,7 +436,10 @@ onDisconnect(int fd)
     auto it = connections.find(fd);
     assert(it != connections.end());
 
-    connectedNodes.erase(it->second.nodeId);
+    const auto& conn = it->second;
+    print(myId, "disc", fd, conn.id, conn.nodeId, conn.version);
+
+    connectedNodes.erase(conn.nodeId);
     connections.erase(it);
 }
 
@@ -456,7 +459,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     assert(conn.version == Msg::Version);
-    print(myId, "recv", "init", conn.version, nodeId);
+    print(myId, "recv", "init", conn.version, nodeId, it == last);
 
     if (!conn.nodeId) {
         conn.nodeId = nodeId;
@@ -635,6 +638,8 @@ doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 
     int fd = socket.fd();
     connections[fd].pendingFetch.emplace_back(key, keyId);
+
+    print(myId, "conn", fd, node);
     endpoint.connect(std::move(socket));
 }
 
@@ -798,12 +803,13 @@ randomConnect(double now)
         if (connIt != connectedNodes.end()) continue;
 
         auto socket = Socket::connect(nodeIt->addrs);
-        if (!socket.fd()) continue;
+        int fd = socket.fd();
+        if (!fd) continue;
 
-        connectedNodes.emplace(nodeIt->id, socket.fd());
-        connections[socket.fd()].nodeId = nodeIt->id;
+        connectedNodes.emplace(nodeIt->id, fd);
+        connections[fd].nodeId = nodeIt->id;
 
-        print(myId, "conn", *nodeIt, connects);
+        print(myId, "conn", fd, *nodeIt, connects);
         endpoint.connect(nodeIt->addrs);
     }
 }

@@ -85,6 +85,7 @@ BOOST_AUTO_TEST_CASE(basics)
                     node0.forget("key0", handle);
                 });
 
+        lockless::sleep(WaitPeriod);
         node1.publish("key0", pack(size_t(1)));
 
         double elapsed = waitFor(discovered);
