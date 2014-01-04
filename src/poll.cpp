@@ -111,5 +111,27 @@ poll(size_t timeout)
 }
 
 
+/******************************************************************************/
+/* POLL THREAD                                                                */
+/******************************************************************************/
+
+void
+PollThread::
+run()
+{
+    isDone = false;
+    th = std::thread([=] { while(!isDone) poll(100); });
+}
+
+void
+PollThread::
+join()
+{
+    if (!isDone) return;
+    isDone = true;
+    th.join();
+}
+
+
 
 } // slick

@@ -9,6 +9,8 @@
 
 #include "lockless/tls.h"
 
+#include <thread>
+#include <atomic>
 #include <functional>
 #include <cassert>
 #include <unordered_map>
@@ -104,6 +106,23 @@ struct IsPollThread
 
 private:
     size_t pollThread;
+};
+
+
+/******************************************************************************/
+/* POLL THREAD                                                                */
+/******************************************************************************/
+
+// EXTREMELY simple poll thread. Mostly useful for tests.
+struct PollThread : public SourcePoller
+{
+    PollThread() : isDone(true) {}
+    void run();
+    void join();
+
+private:
+    std::thread th;
+    std::atomic<bool> isDone;
 };
 
 
