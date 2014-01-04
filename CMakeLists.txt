@@ -127,6 +127,7 @@ endfunction()
 
 slick_test(pack)
 slick_test(endpoint)
+slick_test(discovery)
 
 add_executable(packet_test tests/packet_test.cpp)
 target_link_libraries(packet_test slick)
