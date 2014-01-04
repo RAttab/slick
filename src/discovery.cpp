@@ -14,8 +14,127 @@
 #include <vector>
 #include <algorithm>
 #include <functional>
+#include <sstream>
+#include <iostream>
 
 namespace slick {
+
+/******************************************************************************/
+/* DEBUG                                                                      */
+/******************************************************************************/
+/** This debug crap got a bit out of hand. I blame big government. */
+
+namespace {
+
+template<typename Arg, typename... Rest>
+void streamAll(std::ostream&, const Arg&, const Rest&...);
+
+template<typename T>
+ std::ostream& operator<<(std::ostream&, const std::vector<T>&);
+
+template<typename T>
+ std::ostream& operator<<(std::ostream&, const std::set<T>&);
+
+template<typename... Args>
+std::ostream& operator<<(std::ostream&, const std::tuple<Args...>&);
+
+} // namespace anonymous
+
+
+// for the friend crap to work this needs to be outside the anon namespace.
+std::ostream& operator<<(
+        std::ostream& stream, const DistributedDiscovery::Item& item)
+{
+    stream << "<";
+    streamAll(stream, item.id, item.addrs, item.ttl());
+    stream << ">";
+    return stream;
+}
+
+
+namespace {
+
+std::ostream& operator<<(std::ostream& stream, const Payload& data)
+{
+    stream << "<pl:" << data.size() << ">";
+    return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const UUID& uuid)
+{
+    // stream << uuid.toString();
+    stream << lockless::format("%08x", uuid.time_low);
+    return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const Address& addr)
+{
+    stream << addr.toString();
+    return stream;
+}
+
+
+template<typename TupleT, size_t... S>
+std::ostream& streamTuple(std::ostream& stream, const TupleT& value, Seq<S...>)
+{
+    stream << "<";
+    streamAll(stream, std::get<S>(value)...);
+    stream << ">";
+    return stream;
+}
+
+template<typename... Args>
+std::ostream& operator<<(std::ostream& stream, const std::tuple<Args...>& value)
+{
+    streamTuple(stream, value, typename GenSeq<sizeof...(Args)>::type());
+    return stream;
+}
+
+
+template<typename T>
+std::ostream& operator<<(std::ostream& stream, const std::vector<T>& vec)
+{
+    stream << "[ ";
+    for (const auto& val : vec) stream << val << " ";
+    stream << "]";
+    return stream;
+}
+
+
+template<typename T>
+std::ostream& operator<<(std::ostream& stream, const std::set<T>& vec)
+{
+    stream << "[ ";
+    for (const auto& val : vec) stream << val << " ";
+    stream << "]";
+    return stream;
+}
+
+
+void streamAll(std::ostream&) {}
+
+template<typename Arg, typename... Rest>
+void streamAll(std::ostream& stream, const Arg& arg, const Rest&... rest)
+{
+    stream << arg;
+    if (!sizeof...(rest)) return;
+
+    stream << " ";
+    streamAll(stream, rest...);
+}
+
+
+template<typename... Args>
+void print(UUID& id, const char* action, const Args&... args)
+{
+    std::stringstream ss;
+    ss << id << ": " << action << "(";
+    streamAll(ss, args...);
+    ss << ")\n";
+    std::cerr << ss.str();
+}
+
+} // namespace anonymous
 
 
 /******************************************************************************/
@@ -203,8 +322,11 @@ discover(const std::string& key, Watch&& watch)
         return;
     }
 
+    print(myId, "wtch", key, watch.handle);
+
     if (!watches.count(key)) {
         std::vector<QueryItem> items = { key };
+        print(myId, "brod", "qury", myNode, items);
         endpoint.broadcast(packAll(Msg::Query, myNode, items));
     }
 
@@ -246,11 +368,13 @@ publish(const std::string& key, Payload&& data)
         return;
     }
 
+    print(myId, "publ", key, data);
     this->data[key] = Data(std::move(data));
 
     std::vector<KeyItem> items;
     items.emplace_back(key, myId, myNode, ttl_);
 
+    print(myId, "brod", "keys", items);
     endpoint.broadcast(packAll(Msg::Keys, items));
 }
 
@@ -276,11 +400,14 @@ onConnect(int fd)
     conn.fd = fd;
 
     auto head = std::make_tuple(Msg::Init, Msg::Version);
-
     Payload data;
 
-    if (conn.pendingFetch.empty()) data = pack(head);
+    if (conn.pendingFetch.empty()) {
+        print(myId, "send", "init", Msg::Version);
+        data = pack(head);
+    }
     else {
+        print(myId, "send", "init", Msg::Version, "fetch", conn.pendingFetch);
         data = packAll(head, Msg::Fetch, conn.pendingFetch);
         conn.pendingFetch.clear();
     }
@@ -310,6 +437,8 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     assert(conn.version == Msg::Version);
+    print(myId, "recv", "init", conn.version);
+
 
     if (!data.empty()) {
         std::vector<KeyItem> items;
@@ -318,6 +447,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& key : data)
             items.emplace_back(key.first, key.second.id, myNode, ttl_);
 
+        print(myId, "send", "keys", items);
         endpoint.send(conn.fd, packAll(Msg::Keys, items));
     }
 
@@ -328,6 +458,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         for (const auto& watch : watches)
             items.emplace_back(watch.first);
 
+        print(myId, "send", "qury", myNode, items);
         auto Msg = packAll(Msg::Query, myNode, items);
         endpoint.send(conn.fd, std::move(Msg));
     }
@@ -347,6 +478,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
             items.emplace_back(node.id, node.addrs, ttl);
         }
 
+        print(myId, "send", "node", items);
         endpoint.send(conn.fd, packAll(Msg::Nodes, items));
     }
 
@@ -360,6 +492,8 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
 {
     std::vector<KeyItem> items;
     it = unpack(items, it, last);
+
+    print(myId, "recv", "keys", items);
 
     std::vector<KeyItem> toForward;
     toForward.reserve(items.size());
@@ -384,8 +518,10 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
         list.insert(std::move(value));
     }
 
-    if (!toForward.empty())
+    if (!toForward.empty()) {
+        print(myId, "fwrd", "keys", toForward);
         endpoint.broadcast(packAll(Msg::Keys, toForward));
+    }
 
     return it;
 }
@@ -398,6 +534,8 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     NodeLocation node;
     std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
+
+    print(myId, "recv", "qury", node, items);
 
     std::vector<KeyItem> reply;
     reply.reserve(items.size());
@@ -414,8 +552,10 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
         }
     }
 
-    if (!reply.empty())
+    if (!reply.empty()) {
+        print(myId, "repl", "keys", reply);
         endpoint.send(conn.fd, packAll(Msg::Keys, reply));
+    }
 
     return it;
 }
@@ -427,6 +567,8 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 {
     std::vector<NodeItem> items;
     it = unpack(items, it, last);
+
+    print(myId, "recv", "node", items);
 
     std::vector<NodeItem> toForward;
     toForward.reserve(items.size());
@@ -446,8 +588,10 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
         nodes.insert(std::move(value));
     }
 
-    if (!toForward.empty())
+    if (!toForward.empty()) {
+        print(myId, "fwrd", "node", toForward);
         endpoint.broadcast(packAll(Msg::Nodes, toForward));
+    }
 
     return it;
 }
@@ -472,6 +616,8 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<FetchItem> items;
     it = unpack(items, it, last);
 
+    print(myId, "recv", "fetch", items);
+
     std::vector<DataItem> reply;
     reply.reserve(items.size());
 
@@ -487,8 +633,10 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
         reply.emplace_back(key, it->second.data);
     }
 
-    if (!reply.empty())
+    if (!reply.empty()) {
+        print(myId, "repl", "data", reply);
         endpoint.send(conn.fd, packAll(Msg::Data, reply));
+    }
 
     return it;
 }
@@ -500,6 +648,8 @@ onData(ConnState&, ConstPackIt it, ConstPackIt last)
 {
     std::vector<DataItem> items;
     it = unpack(items, it, last);
+
+    print(myId, "repl", "data", items);
 
     for (auto& item : items) {
         std::string key;
@@ -537,6 +687,7 @@ expireItem(SortedVector<Item>& list, double now)
     auto it = pickRandom(list.begin(), list.end(), rng);
     if (it->ttl(now)) return false;
 
+    print(myId, "expr", it->id, it->ttl(now));
     list.erase(it);
     return true;
 }
@@ -582,6 +733,9 @@ rotateConnections()
         }
     }
 
+    if (!toDisconnect.empty())
+        print(myId, "disc", toDisconnect);
+
     // Need to defer the call because the call could invalidate our connection
     // iterator through our onLostConnection callback.
     for (auto fd : toDisconnect)
@@ -589,6 +743,9 @@ rotateConnections()
 
     size_t connects = targetSize - connections.size();
     auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), connects, rng);
+
+    if (!picks.empty()) print(myId, "conn", picks);
+
     for (const auto& node : picks)
         endpoint.connect(node.addrs);
 }

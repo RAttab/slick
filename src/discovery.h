@@ -145,6 +145,9 @@ private:
         bool operator<(const Item& other) const { return id < other.id; }
     };
 
+    friend std::ostream& operator<<(std::ostream&, const Item&);
+
+
     struct Data
     {
         UUID id;
