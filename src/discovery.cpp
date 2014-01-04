@@ -168,6 +168,18 @@ std::set<T> pickRandom(It first, It last, size_t n, Rng& rng)
 
 
 /******************************************************************************/
+/* CONN STATE                                                                 */
+/******************************************************************************/
+
+DistributedDiscovery::ConnState::
+ConnState() : fd(0), version(0)
+{
+    static std::atomic<size_t> idCounter{0};
+    id = ++idCounter;
+}
+
+
+/******************************************************************************/
 /* WATCH                                                                      */
 /******************************************************************************/
 
@@ -398,16 +410,17 @@ onConnect(int fd)
 {
     auto& conn = connections[fd];
     conn.fd = fd;
+    connExpiration.emplace_back(fd, conn.id, lockless::wall());
 
-    auto head = std::make_tuple(Msg::Init, Msg::Version);
+    auto head = std::make_tuple(Msg::Init, Msg::Version, myId);
     Payload data;
 
     if (conn.pendingFetch.empty()) {
-        print(myId, "send", "init", Msg::Version);
+        print(myId, "send", "init", Msg::Version, myId);
         data = pack(head);
     }
     else {
-        print(myId, "send", "init", Msg::Version, "fetch", conn.pendingFetch);
+        print(myId, "send", "init", Msg::Version, myId, "fetch", conn.pendingFetch);
         data = packAll(head, Msg::Fetch, conn.pendingFetch);
         conn.pendingFetch.clear();
     }
@@ -420,7 +433,11 @@ void
 DistributedDiscovery::
 onDisconnect(int fd)
 {
-    connections.erase(fd);
+    auto it = connections.find(fd);
+    assert(it != connections.end());
+
+    connectedNodes.erase(it->second.nodeId);
+    connections.erase(it);
 }
 
 
@@ -429,15 +446,27 @@ DistributedDiscovery::
 onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::string init;
-    it = unpackAll(it, last, init, conn.version);
+    UUID nodeId;
+    it = unpackAll(it, last, init, conn.version, nodeId);
 
     if (init != Msg::Init) {
+        print(myId, "!err", "init-wrong-head", init);
         endpoint.disconnect(conn.fd);
         return last;
     }
 
     assert(conn.version == Msg::Version);
-    print(myId, "recv", "init", conn.version);
+    print(myId, "recv", "init", conn.version, nodeId);
+
+    if (!conn.nodeId) {
+        conn.nodeId = nodeId;
+        connectedNodes[nodeId] = conn.fd;
+    }
+    else if (nodeId != conn.nodeId) {
+        print(myId, "!err", "init-wrong-id", nodeId.toString(), conn.nodeId.toString());
+        endpoint.disconnect(conn.fd);
+        return last;
+    }
 
 
     if (!data.empty()) {
@@ -599,13 +628,13 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 
 void
 DistributedDiscovery::
-doFetch(const std::string& key, const UUID& id, const NodeLocation& node)
+doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 {
     auto socket = Socket::connect(node);
     if (!socket) return;
 
     int fd = socket.fd();
-    connections[fd].pendingFetch.emplace_back(key, id);
+    connections[fd].pendingFetch.emplace_back(key, keyId);
     endpoint.connect(std::move(socket));
 }
 
@@ -672,10 +701,12 @@ DistributedDiscovery::
 onTimer(size_t)
 {
     double now = lockless::wall();
+    print(myId, "tick", size_t(now));
 
     while(!nodes.empty() && expireItem(nodes, now));
     while(!keys.empty() && expireKeys(now));
-    rotateConnections();
+    randomDisconnect(now);
+    randomConnect(now);
 }
 
 bool
@@ -708,46 +739,73 @@ expireKeys(double now)
 
 void
 DistributedDiscovery::
-rotateConnections()
+randomDisconnect(double now)
 {
+    if (connections.empty()) return;
+
     size_t targetSize = lockless::log2(nodes.size());
     size_t disconnects = lockless::log2(targetSize);
+    disconnects = std::min(disconnects, connections.size());
 
     if (connections.size() - disconnects > targetSize)
         disconnects = connections.size() - targetSize;
 
-    std::set<int> toDisconnect;
+    // Need to defer the call because the call could invalidate our connection
+    // iterator through our onLostConnection callback.
+    std::vector<int> toDisconnect;
+    toDisconnect.reserve(disconnects);
 
-    if (disconnects >= connections.size()) {
-        for (const auto& conn : connections)
-            toDisconnect.insert(conn.second.fd);
-    }
-    else {
-        for (size_t i = 0; i < disconnects; ++i) {
-            std::uniform_int_distribution<size_t> dist(0, connections.size() -1);
+    while(disconnects > 0) {
+        const auto& item = connExpiration.front();
+        if (item.time + connExpThresh_ < now) break;
 
-            auto it = connections.begin();
-            std::advance(it, dist(rng));
+        size_t id = item.id;
+        int fd = item.fd;
+        connExpiration.pop_front();
 
-            toDisconnect.insert(it->second.fd);
-        }
+        auto it = connections.find(item.fd);
+        if (it == connections.end() || it->second.id != id) continue;
+
+        toDisconnect.push_back(fd);
+        disconnects--;
     }
 
     if (!toDisconnect.empty())
         print(myId, "disc", toDisconnect);
 
-    // Need to defer the call because the call could invalidate our connection
-    // iterator through our onLostConnection callback.
     for (auto fd : toDisconnect)
         endpoint.disconnect(fd);
+}
+
+void
+DistributedDiscovery::
+randomConnect(double now)
+{
+    if (nodes.empty()) return;
+
+    size_t targetSize = lockless::log2(nodes.size());
+    if (targetSize < connections.size()) return;
 
     size_t connects = targetSize - connections.size();
-    auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), connects, rng);
+    while (connects > 0) {
+        auto nodeIt = pickRandom(nodes.begin(), nodes.end(), rng);
+        if (nodeIt == nodes.end()) break;
+        if (!nodeIt->ttl(now)) continue;
 
-    if (!picks.empty()) print(myId, "conn", picks);
+        connects--; // early increment prevents endless loops.
 
-    for (const auto& node : picks)
-        endpoint.connect(node.addrs);
+        auto connIt = connectedNodes.find(nodeIt->id);;
+        if (connIt != connectedNodes.end()) continue;
+
+        auto socket = Socket::connect(nodeIt->addrs);
+        if (!socket.fd()) continue;
+
+        connectedNodes.emplace(nodeIt->id, socket.fd());
+        connections[socket.fd()].nodeId = nodeIt->id;
+
+        print(myId, "conn", *nodeIt, connects);
+        endpoint.connect(nodeIt->addrs);
+    }
 }
 
 } // slick

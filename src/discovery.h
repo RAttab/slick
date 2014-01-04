@@ -19,6 +19,7 @@
 #include "lockless/tm.h"
 
 #include <set>
+#include <deque>
 #include <string>
 #include <functional>
 
@@ -61,6 +62,8 @@ struct DistributedDiscovery : public Discovery
 
         DefaultPeriod = 60 * 1,
         DefaultTTL    = 60 * 60 * 8,
+
+        DefaultExpThresh = 10,
     };
     typedef std::vector<Address> NodeLocation;
 
@@ -78,6 +81,8 @@ struct DistributedDiscovery : public Discovery
     virtual void retract(const std::string& key);
 
     void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
+    void connExpThresh(size_t sec = DefaultExpThresh) {connExpThresh_ = sec; }
+
     void setPeriod(size_t sec = DefaultPeriod);
 
     const UUID& id() const { return myId; }
@@ -94,17 +99,25 @@ private:
     struct ConnState
     {
         int fd;
+        size_t id; // sady, fds aren't unique so this is to dedup them.
+        UUID nodeId;
         uint32_t version;
-        double connectionTime;
         std::vector<FetchItem> pendingFetch;
 
-        ConnState() :
-            fd(0), version(0), connectionTime(lockless::wall())
-        {}
-
+        ConnState();
         operator bool() const { return version; }
     };
 
+    struct ConnExpItem
+    {
+        int fd;
+        size_t id;
+        double time;
+
+        ConnExpItem(int fd = 0, size_t id = 0, double time = 0) :
+            fd(fd), id(id), time(time)
+        {}
+    };
 
     struct Item
     {
@@ -175,15 +188,18 @@ private:
 
 
     size_t ttl_;
+    size_t connExpThresh_;
 
     UUID myId;
     NodeLocation myNode;
 
     SortedVector<Item> nodes;
+    std::unordered_map<UUID, int> connectedNodes;
     std::unordered_map<std::string, SortedVector<Item> > keys;
     std::unordered_map<std::string, std::set<Watch> > watches;
     std::unordered_map<std::string, Data> data;
     std::unordered_map<int, ConnState> connections;
+    std::deque<ConnExpItem> connExpiration;
 
     std::mt19937 rng;
 
@@ -214,10 +230,11 @@ private:
     ConstPackIt onFetch(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
-    void doFetch(const std::string& key, const UUID& id, const NodeLocation& node);
+    void doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
     bool expireItem(SortedVector<Item>& list, double now);
     bool expireKeys(double now);
-    void rotateConnections();
+    void randomDisconnect(double now);
+    void randomConnect(double now);
 
 };
 
