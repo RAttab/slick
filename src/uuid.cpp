@@ -47,9 +47,9 @@ bool linuxRandom(uint8_t* bytes, size_t n)
 {
     static int fd = 0;
     if (!fd) {
-        fd = open("/dev/random", O_RDONLY);
+        fd = open("/dev/urandom", O_RDONLY);
         if (fd < 0)
-            fd = open("/dev/urandom", O_RDONLY);
+            fd = open("/dev/random", O_RDONLY);
     }
     if (fd < 0) return false;
 
