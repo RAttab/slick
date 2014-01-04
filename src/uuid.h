@@ -68,6 +68,11 @@ struct UUID
         return !operator==(other);
     }
 
+    operator bool() const
+    {
+        return time_low || time_mid || time_hi_and_version || clock_seq
+            || std::count(std::begin(node), std::end(node), 0) != sizeof(node);
+    }
 };
 
 locklessStaticAssert(sizeof(UUID) == 16);
