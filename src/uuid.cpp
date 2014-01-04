@@ -130,7 +130,7 @@ std::string
 UUID::
 toString() const
 {
-    return lockless::format("%x-%x-%x-%x-%x%x%x%x%x%x",
+    return lockless::format("%08x-%04x-%04x-%04x-%02x%02x%02x%02x%02x%02x",
             uint32_t(time_low), uint32_t(time_mid), uint32_t(time_hi_and_version),
             uint32_t(clock_seq),
             uint32_t(node[0]), uint32_t(node[1]), uint32_t(node[2]),
