@@ -119,7 +119,8 @@ size_t
 DistributedDiscovery::
 timerPeriod(size_t base)
 {
-    size_t min = base / 2, max = min + base;
+    size_t min = std::max<size_t>(1, base / 2);
+    size_t max = min + base;
     return std::uniform_int_distribution<size_t>(min, max)(rng);
 }
 
@@ -132,10 +133,10 @@ setPeriod(size_t sec)
 
 void
 DistributedDiscovery::
-poll()
+poll(size_t timeoutMs)
 {
     isPollThread.set();
-    poller.poll();
+    poller.poll(timeoutMs);
 }
 
 void

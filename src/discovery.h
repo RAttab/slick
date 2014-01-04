@@ -33,8 +33,8 @@ struct Discovery
     typedef size_t WatchHandle;
     typedef std::function<void(WatchHandle, const Payload&)> WatchFn;
 
-    virtual void fd() = 0;
-    virtual void poll() = 0;
+    virtual int fd() const = 0;
+    virtual void poll(size_t timeoutMs = 0) = 0;
     virtual void shutdown() {}
 
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch) = 0;
@@ -67,7 +67,7 @@ struct DistributedDiscovery : public Discovery
             const std::vector<Address>& seed, Port port = DefaultPort);
 
     virtual int fd() const { return poller.fd(); }
-    virtual void poll();
+    virtual void poll(size_t timeoutMs = 0);
     virtual void shutdown();
 
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch);
