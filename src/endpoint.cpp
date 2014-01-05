@@ -218,7 +218,7 @@ Endpoint::
 recvPayload(int fd)
 {
     auto connIt = connections.find(fd);
-    assert(connIt != connections.end());
+    if (connIt == connections.end()) return;
 
     auto& conn = connIt->second;
     conn.recvQueue.reserve(1 << 5);
