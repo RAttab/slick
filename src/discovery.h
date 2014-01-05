@@ -239,7 +239,11 @@ private:
     ConstPackIt onFetch(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
-    void doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
+    void sendInitQueries(ConnState& conn);
+    void sendInitKeys(ConnState& conn);
+    void sendInitNodes(ConnState& conn);
+    void sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
+
     bool expireItem(SortedVector<Item>& list, double now);
     bool expireKeys(double now);
     void randomDisconnect(double now);

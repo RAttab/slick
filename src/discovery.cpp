@@ -280,7 +280,7 @@ discover(const std::string& key, Watch&& watch)
     if (it == keys.end()) return;
 
     for (const auto& node : it->second)
-        doFetch(key, node.id, node.addrs);
+        sendFetch(key, node.id, node.addrs);
 }
 
 void
@@ -415,50 +415,66 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         if (type == Msg::Fetch) return it;
     }
 
-
-    if (!data.empty()) {
-        std::vector<KeyItem> items;
-        items.reserve(data.size());
-
-        for (const auto& key : data)
-            items.emplace_back(key.first, key.second.id, myNode, ttl_);
-
-        print(myId, "send", "keys", items);
-        endpoint.send(conn.fd, packAll(Msg::Keys, items));
-    }
-
-    if (!watches.empty()) {
-        std::vector<QueryItem> items;
-        items.reserve(watches.size());
-
-        for (const auto& watch : watches)
-            items.emplace_back(watch.first);
-
-        print(myId, "send", "qury", myNode, items);
-        auto Msg = packAll(Msg::Query, myNode, items);
-        endpoint.send(conn.fd, std::move(Msg));
-    }
-
-    {
-        double now = lockless::wall();
-        size_t numPicks = lockless::log2(nodes.size());
-
-        std::vector<NodeItem> items;
-        items.reserve(numPicks + 1);
-        items.emplace_back(myId, myNode, ttl_);
-
-        auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), numPicks, rng);
-        for (const auto& node : picks) {
-            size_t ttl = node.ttl(now);
-            if (!ttl) continue;
-            items.emplace_back(node.id, node.addrs, ttl);
-        }
-
-        print(myId, "send", "node", items);
-        endpoint.send(conn.fd, packAll(Msg::Nodes, items));
-    }
+    sendInitQueries(conn);
+    sendInitKeys(conn);
+    sendInitNodes(conn);
 
     return it;
+}
+
+void
+DistributedDiscovery::
+sendInitQueries(ConnState& conn)
+{
+    if (watches.empty()) return;
+
+    std::vector<QueryItem> items;
+    items.reserve(watches.size());
+
+    for (const auto& watch : watches)
+        items.emplace_back(watch.first);
+
+    print(myId, "send", "qury", myNode, items);
+    auto Msg = packAll(Msg::Query, myNode, items);
+    endpoint.send(conn.fd, std::move(Msg));
+}
+
+void
+DistributedDiscovery::
+sendInitKeys(ConnState& conn)
+{
+    if (data.empty()) return;
+
+    std::vector<KeyItem> items;
+    items.reserve(data.size());
+
+    for (const auto& key : data)
+        items.emplace_back(key.first, key.second.id, myNode, ttl_);
+
+    print(myId, "send", "keys", items);
+    endpoint.send(conn.fd, packAll(Msg::Keys, items));
+}
+
+void
+DistributedDiscovery::
+sendInitNodes(ConnState& conn)
+{
+    double now = lockless::wall();
+    size_t numPicks = lockless::log2(nodes.size());
+
+    std::vector<NodeItem> items;
+    items.reserve(numPicks + 1);
+    items.emplace_back(myId, myNode, ttl_);
+
+    auto picks = pickRandom<Item>(nodes.begin(), nodes.end(), numPicks, rng);
+    for (const auto& node : picks) {
+        size_t ttl = node.ttl(now);
+        if (!ttl) continue;
+        items.emplace_back(node.id, node.addrs, ttl);
+    }
+
+    print(myId, "send", "node", items);
+    endpoint.send(conn.fd, packAll(Msg::Nodes, items));
 }
 
 
@@ -488,7 +504,7 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
             continue;
         }
 
-        if (watches.count(key)) doFetch(key, value.id, value.addrs);
+        if (watches.count(key)) sendFetch(key, value.id, value.addrs);
         toForward.emplace_back(key, value.id, value.addrs, value.ttl(now));
 
         list.insert(std::move(value));
@@ -576,7 +592,7 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 
 void
 DistributedDiscovery::
-doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
+sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 {
     auto socket = Socket::connect(node);
     if (!socket) return;
@@ -658,7 +674,7 @@ DistributedDiscovery::
 onTimer(size_t)
 {
     double now = lockless::wall();
-    print(myId, "tick", size_t(now));
+    print(myId, "tick", size_t(now), nodes.size(), lockless::log2(nodes.size()));
 
     while(!nodes.empty() && expireItem(nodes, now));
     while(!keys.empty() && expireKeys(now));
