@@ -37,6 +37,13 @@ Endpoint()
 
     disconnects.onOperation = std::bind(&Endpoint::disconnect, this, _1);
     poller.add(disconnects.fd());
+
+    onError = [=] (int, int errnum) {
+        if (errnum == ECONNRESET || errnum == EPIPE) return true;
+
+        auto errStr = checkErrnoString(errnum, "Endpoint.onError");
+        throw std::runtime_error(errStr);
+    };
 }
 
 
@@ -96,12 +103,10 @@ poll(int timeoutMs)
                 auto& conn = connections[ev.data.fd];
 
                 int err = conn.socket.error();
-                if (err & EPOLLRDHUP || err & EPOLLHUP) {
-                    disconnect(ev.data.fd);
-                    continue;
-                }
 
-                conn.socket.throwError();
+                if (!err) continue;
+                else if (!onError || onError(ev.data.fd, err))
+                    disconnect(ev.data.fd);
             }
 
             if (ev.events & EPOLLIN) recvPayload(ev.data.fd);

@@ -42,6 +42,9 @@ struct Endpoint
     PayloadFn onPayload;
     PayloadFn onDroppedPayload;
 
+    typedef std::function<bool(int fd, int errnum)> ErrorFn;
+    ErrorFn onError;
+
 
     int fd() const { return poller.fd(); }
     void poll(int timeoutMs = 0);
