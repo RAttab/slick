@@ -222,7 +222,7 @@ shutdown()
 
 void
 DistributedDiscovery::
-onPayload(int fd, Payload&& data)
+onPayload(int fd, const Payload& data)
 {
     auto connIt = connections.find(fd);
     if (connIt == connections.end()) return;

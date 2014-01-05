@@ -228,7 +228,7 @@ private:
     size_t timerPeriod(size_t secs);
     void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);
-    void onPayload(int fd, Payload&& data);
+    void onPayload(int fd, const Payload& data);
     void onConnect(int fd);
     void onDisconnect(int fd);
 
