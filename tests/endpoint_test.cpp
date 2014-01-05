@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(basics)
     enum { Pings = 32 };
     size_t pingRecv = 0, pongRecv = 0;
 
-    SourcePoller poller;
+    PollThread poller;
 
     PassiveEndpoint provider(listenPort);
     poller.add(provider);
@@ -91,9 +91,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
     Connection conn(client, { "localhost", listenPort });
 
-    std::atomic<bool> shutdown(false);
-    auto pollFn = [&] { while (!shutdown) poller.poll(); };
-    std::thread pollTh(pollFn);
+    poller.run();
 
     for (size_t i = 0; i < Pings; ++i) {
         stringstream ss; ss << "PING { ";
@@ -104,8 +102,7 @@ BOOST_AUTO_TEST_CASE(basics)
     }
 
     lockless::sleep(100);
-    shutdown = true;
-    pollTh.join();
+    poller.join();
 
     BOOST_CHECK_EQUAL(Pings, pingRecv);
     BOOST_CHECK_EQUAL(Pings, pongRecv);
@@ -123,7 +120,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     const Port listenPortStart = 30000;
 
-    SourcePoller provPoller;
+    PollThread provPoller;
 
     array<shared_ptr<PassiveEndpoint>, N> providers;
     array<size_t, N> clientIdSums;
@@ -147,15 +144,12 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     }
 
-    std::atomic<bool> provShutdown(false);
-    auto provPollFn = [&] { while (!provShutdown) provPoller.poll(); };
-    std::thread provPollTh(provPollFn);
-
+    provPoller.run();
 
     // CLIENTS -----------------------------------------------------------------
     cerr << fmtTitle("clients") << endl;
 
-    SourcePoller clientPoller;
+    PollThread clientPoller;
 
     Endpoint client;
     clientPoller.add(client);
@@ -171,9 +165,7 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     array<shared_ptr<Connection>, N> connections;
 
-    std::atomic<bool> clientShutdown(false);
-    auto clientPollFn = [&] { while (!clientShutdown) clientPoller.poll(); };
-    std::thread clientPollTh(clientPollFn);
+    clientPoller.run();
 
     for (size_t id = 0; id < N; ++id) {
         connections[id] = make_shared<Connection>(
@@ -191,11 +183,8 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     cerr << fmtTitle("done") << endl;
 
-    provShutdown = true;
-    clientShutdown = true;
-
-    provPollTh.join();
-    clientPollTh.join();
+    provPoller.join();
+    clientPoller.join();
 
     client.shutdown();
     for (auto& prov : providers) prov->shutdown();
@@ -214,7 +203,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
     std::atomic<bool> gotClient(false);
     std::atomic<bool> lostClient(false);
 
-    SourcePoller poller;
+    PollThread poller;
 
     PassiveEndpoint provider(listenPort);
     poller.add(provider);
@@ -231,9 +220,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
     Endpoint client;
     poller.add(client);
 
-    std::atomic<bool> shutdown(false);
-    auto pollFn = [&] { while (!shutdown) poller.poll(); };
-    std::thread pollTh(pollFn);
+    poller.run();
 
     lockless::sleep(1);
 
@@ -243,8 +230,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
     conn.reset();
     while(!lostClient);
 
-    shutdown = true;
-    pollTh.join();
+    poller.join();
 }
 
 BOOST_AUTO_TEST_CASE(hard_disconnect)
@@ -260,7 +246,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
         std::atomic<bool> gotClient(false);
         std::atomic<bool> lostClient(false);
 
-        SourcePoller poller;
+        PollThread poller;
 
         PassiveEndpoint provider(listenPort);
         poller.add(provider);
@@ -274,9 +260,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
             printf("prv: lost %d\n", fd);;
         };
 
-        std::atomic<bool> shutdown(false);
-        auto pollFn = [&] { while (!shutdown) poller.poll(); };
-        std::thread pollTh(pollFn);
+        poller.run();
 
         while(!gotClient);
 
@@ -284,23 +268,19 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
 
         while(!lostClient);
 
-        shutdown = true;
-        pollTh.join();
+        poller.join();
     }
 
     else {
-        SourcePoller poller;
+        PollThread poller;
 
         Endpoint client;
         poller.add(client);
 
-        std::atomic<bool> shutdown(false);
-        auto pollFn = [&] { while (!shutdown) poller.poll(); };
-        std::thread pollTh(pollFn);
+        poller.run();
 
         Connection conn(client, { "localhost", listenPort });
 
         while(true);
     }
 }
-

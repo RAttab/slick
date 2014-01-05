@@ -127,7 +127,7 @@ void
 PollThread::
 join()
 {
-    if (!isDone) return;
+    if (isDone) return;
     isDone = true;
     th.join();
 }

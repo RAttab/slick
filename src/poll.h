@@ -117,6 +117,8 @@ private:
 struct PollThread : public SourcePoller
 {
     PollThread() : isDone(true) {}
+    ~PollThread() { join(); }
+
     void run();
     void join();
 
