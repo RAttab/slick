@@ -345,6 +345,7 @@ onConnect(int fd)
     auto& conn = connections[fd];
     conn.fd = fd;
     connExpiration.emplace_back(fd, conn.id, lockless::wall());
+    print(myId, "ocon", fd, conn.id, conn.isFetch, conn.nodeId);
 
     auto head = std::make_tuple(Msg::Init, Msg::Version, myId);
     Payload data;
@@ -408,6 +409,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     // Fetch sockets can duplicate an existing link between two node so it's
     // specialized the fetch-data messages only.
+    if (conn.isFetch) return it;
     if (it != last) {
         auto type = unpack<Msg::Type>(it, last);
         if (type == Msg::Fetch) return it;
@@ -437,7 +439,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         endpoint.send(conn.fd, std::move(Msg));
     }
 
-    if (!nodes.empty()) {
+    {
         double now = lockless::wall();
         size_t numPicks = lockless::log2(nodes.size());
 
@@ -632,7 +634,7 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<DataItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "repl", "data", items);
+    print(myId, "recv", "data", items);
 
     for (auto& item : items) {
         std::string key;
@@ -758,7 +760,7 @@ randomConnect(double now)
         connectedNodes.emplace(nodeIt->id, fd);
         connections[fd].nodeId = nodeIt->id;
 
-        print(myId, "rconn", fd, *nodeIt, connects);
+        print(myId, "rcon", fd, *nodeIt, connects);
         endpoint.connect(std::move(socket));
     }
 }

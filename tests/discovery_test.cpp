@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(basics)
         node1.publish("key0", pack(size_t(1)));
 
         double elapsed = waitFor(discovered);
-        printf("\ndiscovery in %s\n", fmtElapsed(elapsed).c_str());
+        printf("discovery in %s\n\n", fmtElapsed(elapsed).c_str());
         BOOST_CHECK_EQUAL(discovered.load(), 1);
     }
 
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(basics)
                 });
 
         double elapsed = waitFor(discovered);
-        printf("\ndiscovery in %s\n", fmtElapsed(elapsed).c_str());
+        printf("discovery in %s\n\n", fmtElapsed(elapsed).c_str());
         BOOST_CHECK_EQUAL(discovered.load(), 2);
     }
 
