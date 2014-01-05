@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(basics)
         std::atomic<size_t> discovered(0);
         node0.discover("key0", [&] (Discovery::WatchHandle handle, const Payload& data) {
                     discovered = unpack<size_t>(data);
-                    printf("%s: disc=%s -> %lu\n", fmt(node0.id()), "key0", discovered.load());
+                    printf("node0: key0=%lu\n", discovered.load());
                     node0.forget("key0", handle);
                 });
 
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(basics)
         node1.publish("key0", pack(size_t(1)));
 
         double elapsed = waitFor(discovered);
-        printf("Discoverd in %s\n", fmtElapsed(elapsed).c_str());
+        printf("\ndiscovery in %s\n", fmtElapsed(elapsed).c_str());
         BOOST_CHECK_EQUAL(discovered.load(), 1);
     }
 
@@ -105,11 +105,12 @@ BOOST_AUTO_TEST_CASE(basics)
 
         node1.discover("key1", [&] (Discovery::WatchHandle handle, const Payload& data) {
                     discovered = unpack<size_t>(data);
+                    printf("node1: key1=%lu\n", discovered.load());
                     node0.forget("key1", handle);
                 });
 
         double elapsed = waitFor(discovered);
-        printf("Discoverd in %s\n", fmtElapsed(elapsed).c_str());
+        printf("\ndiscovery in %s\n", fmtElapsed(elapsed).c_str());
         BOOST_CHECK_EQUAL(discovered.load(), 2);
     }
 
