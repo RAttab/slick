@@ -135,6 +135,9 @@ connect(Socket&& socket)
     int fd = socket.fd();
     poller.add(fd, EPOLLET | EPOLLIN | EPOLLOUT);
 
+    auto it = connections.find(fd);
+    assert(it == connections.end());
+
     ConnectionState connection;
     connection.socket = std::move(socket);
     connections[fd] = std::move(connection);
@@ -206,6 +209,7 @@ processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
         }
 
         it += data.packetSize();
+        assert(data.packetSize());
         conn.recvQueue.emplace_back(std::move(data));
     }
 
