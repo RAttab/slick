@@ -104,7 +104,7 @@ std::set<T> pickRandom(It first, It last, size_t n, Rng& rng)
 /******************************************************************************/
 
 DistributedDiscovery::ConnState::
-ConnState() : fd(0), version(0)
+ConnState() : fd(0), version(0), isFetch(false)
 {
     static std::atomic<size_t> idCounter{0};
     id = ++idCounter;
@@ -150,16 +150,13 @@ DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
     ttl_(DefaultTTL),
     myId(UUID::random()),
+    seeds(seeds),
     rng(lockless::wall()),
     endpoint(port),
     timer(timerPeriod(DefaultPeriod))
 {
     myNode = networkInterfaces(true);
     for (auto& addr : myNode) addr.port = port;
-
-    double now = lockless::wall();
-    for (auto& addr : seeds)
-        nodes.emplace(UUID::random(), NodeLocation({addr}), DefaultTTL, now);
 
     using namespace std::placeholders;
 
@@ -226,7 +223,10 @@ void
 DistributedDiscovery::
 onPayload(int fd, Payload&& data)
 {
-    auto& conn = connections[fd];
+    auto connIt = connections.find(fd);
+    if (connIt == connections.end()) return;
+    auto& conn = connIt->second;
+
     auto it = data.cbegin(), last = data.cend();
 
     if (!conn) it = onInit(conn, it, last);
@@ -312,14 +312,16 @@ publish(const std::string& key, Payload&& data)
         return;
     }
 
-    print(myId, "publ", key, data);
-    this->data[key] = Data(std::move(data));
+    Data item(std::move(data));
+    print(myId, "publ", key, item.id, item.data);
 
     std::vector<KeyItem> items;
-    items.emplace_back(key, myId, myNode, ttl_);
+    items.emplace_back(key, item.id, myNode, ttl_);
 
     print(myId, "brod", "keys", items);
     endpoint.broadcast(packAll(Msg::Keys, items));
+
+    this->data[key] = std::move(item);
 }
 
 
@@ -352,7 +354,7 @@ onConnect(int fd)
         data = pack(head);
     }
     else {
-        print(myId, "send", "init", Msg::Version, myId, "fetch", conn.pendingFetch);
+        print(myId, "send", "init", Msg::Version, myId, "ftch", conn.pendingFetch);
         data = packAll(head, Msg::Fetch, conn.pendingFetch);
         conn.pendingFetch.clear();
     }
@@ -385,7 +387,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     it = unpackAll(it, last, init, conn.version, nodeId);
 
     if (init != Msg::Init) {
-        print(myId, "!err", "init-wrong-head", init);
+        print(myId, "!err", "init-wrong-head", conn.fd, init);
         endpoint.disconnect(conn.fd);
         return last;
     }
@@ -398,9 +400,17 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         connectedNodes[nodeId] = conn.fd;
     }
     else if (nodeId != conn.nodeId) {
-        print(myId, "!err", "init-wrong-id", nodeId.toString(), conn.nodeId.toString());
+        print(myId, "!err", "init-wrong-id",
+                conn.fd, nodeId.toString(), conn.nodeId.toString());
         endpoint.disconnect(conn.fd);
         return last;
+    }
+
+    // Fetch sockets can duplicate an existing link between two node so it's
+    // specialized the fetch-data messages only.
+    if (it != last) {
+        auto type = unpack<Msg::Type>(it, last);
+        if (type == Msg::Fetch) return it;
     }
 
 
@@ -541,6 +551,7 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 
     for (auto& item : items) {
         Item value(std::move(item), now);
+        if (value.id == myId) continue;
 
         auto it = nodes.find(value);
         if (it != nodes.end()) {
@@ -569,9 +580,12 @@ doFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
     if (!socket) return;
 
     int fd = socket.fd();
-    connections[fd].pendingFetch.emplace_back(key, keyId);
-
     print(myId, "conn", fd, node);
+
+    auto connIt = connections.find(fd);
+    assert(connIt == connections.end());
+
+    connections[fd].fetch(key, keyId);
     endpoint.connect(std::move(socket));
 }
 
@@ -582,7 +596,10 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<FetchItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "recv", "fetch", items);
+    print(myId, "recv", "ftch", items);
+
+    for (const auto& blah : data)
+        print(myId, "kydb", blah.first, blah.second.id, blah.second.data);
 
     std::vector<DataItem> reply;
     reply.reserve(items.size());
@@ -604,13 +621,13 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
         endpoint.send(conn.fd, packAll(Msg::Data, reply));
     }
 
-    return it;
+    return last;
 }
 
 
 ConstPackIt
 DistributedDiscovery::
-onData(ConnState&, ConstPackIt it, ConstPackIt last)
+onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<DataItem> items;
     it = unpack(items, it, last);
@@ -629,7 +646,8 @@ onData(ConnState&, ConstPackIt it, ConstPackIt last)
             watch.watch(watch.handle, payload);
     }
 
-    return it;
+    endpoint.disconnect(conn.fd);
+    return last;
 }
 
 
@@ -644,6 +662,7 @@ onTimer(size_t)
     while(!keys.empty() && expireKeys(now));
     randomDisconnect(now);
     randomConnect(now);
+    seedConnect(now);
 }
 
 bool
@@ -692,7 +711,7 @@ randomDisconnect(double now)
     std::vector<int> toDisconnect;
     toDisconnect.reserve(disconnects);
 
-    while(disconnects > 0) {
+    while(disconnects) {
         const auto& item = connExpiration.front();
         if (item.time + connExpThresh_ < now) break;
 
@@ -718,13 +737,11 @@ void
 DistributedDiscovery::
 randomConnect(double now)
 {
-    if (nodes.empty()) return;
-
     size_t targetSize = lockless::log2(nodes.size());
     if (targetSize < connections.size()) return;
 
     size_t connects = targetSize - connections.size();
-    while (connects > 0) {
+    while (connects) {
         auto nodeIt = pickRandom(nodes.begin(), nodes.end(), rng);
         if (nodeIt == nodes.end()) break;
         if (!nodeIt->ttl(now)) continue;
@@ -741,9 +758,26 @@ randomConnect(double now)
         connectedNodes.emplace(nodeIt->id, fd);
         connections[fd].nodeId = nodeIt->id;
 
-        print(myId, "conn", fd, *nodeIt, connects);
-        endpoint.connect(nodeIt->addrs);
+        print(myId, "rconn", fd, *nodeIt, connects);
+        endpoint.connect(std::move(socket));
     }
+}
+
+void
+DistributedDiscovery::
+seedConnect(double)
+{
+    // \todo Should periodicatlly try to reconnect to this to heal partitions.
+    if (!connections.empty()) return;
+
+    for (size_t i = 0; i < seeds.size(); ++i) {
+        auto socket = Socket::connect(seeds[i]);
+        if (!socket.fd()) continue;
+
+        print(myId, "seed", socket.fd(), seeds[i]);
+        endpoint.connect(std::move(socket));
+    }
+
 }
 
 } // slick

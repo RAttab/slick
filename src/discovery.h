@@ -102,10 +102,18 @@ private:
         size_t id; // sady, fds aren't unique so this is to dedup them.
         UUID nodeId;
         uint32_t version;
+
+        bool isFetch;
         std::vector<FetchItem> pendingFetch;
 
         ConnState();
         operator bool() const { return version; }
+
+        void fetch(const std::string& key, const UUID& keyId)
+        {
+            isFetch = true;
+            pendingFetch.emplace_back(key, keyId);
+        }
     };
 
     struct ConnExpItem
@@ -193,6 +201,7 @@ private:
     UUID myId;
     NodeLocation myNode;
 
+    std::vector<Address> seeds;
     SortedVector<Item> nodes;
     std::unordered_map<UUID, int> connectedNodes;
     std::unordered_map<std::string, SortedVector<Item> > keys;
@@ -235,6 +244,7 @@ private:
     bool expireKeys(double now);
     void randomDisconnect(double now);
     void randomConnect(double now);
+    void seedConnect(double now);
 
 };
 
