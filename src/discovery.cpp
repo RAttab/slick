@@ -149,6 +149,7 @@ static constexpr Type Data  = 5;
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
     ttl_(DefaultTTL),
+    connExpThresh_(DefaultExpThresh),
     myId(UUID::random()),
     seeds(seeds),
     rng(lockless::wall()),
@@ -731,7 +732,7 @@ randomDisconnect(double now)
 
     while(disconnects) {
         const auto& item = connExpiration.front();
-        if (item.time + connExpThresh_ < now) break;
+        if (item.time + connExpThresh_ >= now) break;
 
         size_t id = item.id;
         int fd = item.fd;
