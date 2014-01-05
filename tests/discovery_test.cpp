@@ -58,19 +58,22 @@ BOOST_AUTO_TEST_CASE(basics)
     const Port Port1 = Port0 + 1;
 
 
-    PollThread poller;
-
     DistributedDiscovery node0({}, Port0);
     node0.setPeriod(Period);
-    poller.add(node0);
     printf("node0: %s -> %s\n", fmt(node0.id()), fmt(node0.node()));
+
+    PollThread poller0;
+    poller0.add(node0);
+    poller0.run();
+
 
     DistributedDiscovery node1({ Address("localhost", Port0) }, Port1);
     node1.setPeriod(Period);
-    poller.add(node1);
     printf("node1: %s -> %s\n", fmt(node1.id()), fmt(node1.node()));
 
-    poller.run();
+    PollThread poller1;
+    poller1.add(node1);
+    poller1.run();
 
     // Wait for both nodes to notice each other.
     lockless::sleep(WaitPeriod);
@@ -110,5 +113,6 @@ BOOST_AUTO_TEST_CASE(basics)
         BOOST_CHECK_EQUAL(discovered.load(), 2);
     }
 
-    poller.join();
+    poller0.join();
+    poller1.join();
 }
