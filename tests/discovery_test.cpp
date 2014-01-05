@@ -23,7 +23,7 @@ template<typename T>
 double waitFor(T& value)
 {
     double start = lockless::wall();
-    while (!value);
+    while (!value) lockless::sleep(1);
     return lockless::wall() - start;
 }
 

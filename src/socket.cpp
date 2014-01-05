@@ -183,8 +183,9 @@ accept(int fd)
 {
     Socket socket;
 
+    socklen_t addrlen = 0;
     struct sockaddr addr;
-    socklen_t addrlen;
+    std::memset(&addr, 0, sizeof(addr));
 
     socket.fd_ = accept4(fd, &addr, &addrlen, SOCK_NONBLOCK);
     if (socket.fd_ < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
