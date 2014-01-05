@@ -411,10 +411,7 @@ struct Pack< std::vector<T> >
 {
     static size_t size(const std::vector<T>& value)
     {
-        // \todo Confirm that the compiler is capable of optimizing out the loop
-        // for fixed width types. Not sure if it's smart enough to figure out
-        // the for-each loop; might need to switch to a plain old for i loop.
-
+        // Note: gcc optimizes out this loop for simple types.
         size_t size = sizeof(Payload::SizeT);
         for (const auto& item: value) size += packedSize(item);
         return size;
