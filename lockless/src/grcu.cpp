@@ -2,11 +2,11 @@
    Rémi Attab (remi.attab@gmail.com), 01 Apr 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Static Read-Copy-Update gRcuementation.
+   Static Read-Copy-Update implementation.
 */
 
-#define LOCKLESS_RCU_DEBUG 1
-#define LOCKLESS_CHECK_ABORT 1
+#define LOCKLESS_RCU_DEBUG 0
+#define LOCKLESS_CHECK_ABORT 0
 
 #include "grcu.h"
 #include "tls.h"
