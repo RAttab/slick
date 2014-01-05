@@ -252,9 +252,9 @@ recvPayload(int fd)
         assert(bufferIt < (buffer + bufferLength));
     }
 
-    for (auto& data : conn.recvQueue)
+    auto recvQueue = std::move(conn.recvQueue);
+    for (auto& data : recvQueue)
         onPayload(fd, std::move(data));
-    conn.recvQueue.clear();;
 
     if (doDisconnect && connections.count(fd))
         disconnect(fd);

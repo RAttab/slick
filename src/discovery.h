@@ -107,7 +107,8 @@ private:
         std::vector<FetchItem> pendingFetch;
 
         ConnState();
-        operator bool() const { return version; }
+
+        bool initialized() const { return version; }
 
         void fetch(const std::string& key, const UUID& keyId)
         {
@@ -239,9 +240,9 @@ private:
     ConstPackIt onFetch(ConnState& conn, ConstPackIt first, ConstPackIt last);
     ConstPackIt onData (ConnState& conn, ConstPackIt first, ConstPackIt last);
 
-    void sendInitQueries(ConnState& conn);
-    void sendInitKeys(ConnState& conn);
-    void sendInitNodes(ConnState& conn);
+    void sendInitQueries(int fd);
+    void sendInitKeys(int fd);
+    void sendInitNodes(int fd);
     void sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
 
     bool expireItem(SortedVector<Item>& list, double now);

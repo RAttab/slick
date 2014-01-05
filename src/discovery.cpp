@@ -224,26 +224,31 @@ void
 DistributedDiscovery::
 onPayload(int fd, const Payload& data)
 {
-    auto connIt = connections.find(fd);
-    if (connIt == connections.end()) return;
-    auto& conn = connIt->second;
-
     auto it = data.cbegin(), last = data.cend();
 
-    if (!conn) it = onInit(conn, it, last);
+    auto state = [&] (int fd) {
+        auto it = connections.find(fd);
+        return it != connections.end() ? &it->second : nullptr;
+    };
 
-    while (it != last) {
-        Msg::Type type;
-        it = unpack(type, it, last);
+    ConnState* conn = state(fd);
+    if (!conn) return;
 
-        switch(type) {
-        case Msg::Keys:  it = onKeys(conn, it, last); break;
-        case Msg::Query: it = onQuery(conn, it, last); break;
-        case Msg::Nodes: it = onNodes(conn, it, last); break;
-        case Msg::Fetch: it = onFetch(conn, it, last); break;
-        case Msg::Data:  it = onData(conn, it, last); break;
-        default: assert(false);
-        };
+    if (!conn->initialized()) {
+        it = onInit(*conn, it, last);
+        if (it == last || !(conn = state(fd))) return;
+    }
+
+    Msg::Type type;
+    it = unpack(type, it, last);
+
+    switch(type) {
+    case Msg::Keys:  it = onKeys(*conn, it, last); break;
+    case Msg::Query: it = onQuery(*conn, it, last); break;
+    case Msg::Nodes: it = onNodes(*conn, it, last); break;
+    case Msg::Fetch: it = onFetch(*conn, it, last); break;
+    case Msg::Data:  it = onData(*conn, it, last); break;
+    default: assert(false);
     }
 }
 
@@ -393,8 +398,8 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         endpoint.disconnect(conn.fd);
         return last;
     }
-
     assert(conn.version == Msg::Version);
+
     print(myId, "recv", "init", conn.version, nodeId, it == last);
 
     if (!conn.nodeId) {
@@ -416,18 +421,20 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
         if (type == Msg::Fetch) return it;
     }
 
-    sendInitQueries(conn);
-    sendInitKeys(conn);
-    sendInitNodes(conn);
+    int fd = conn.fd;
+    sendInitQueries(fd);
+    sendInitKeys(fd);
+    sendInitNodes(fd);
 
     return it;
 }
 
 void
 DistributedDiscovery::
-sendInitQueries(ConnState& conn)
+sendInitQueries(int fd)
 {
     if (watches.empty()) return;
+    if (!connections.count(fd)) return;
 
     std::vector<QueryItem> items;
     items.reserve(watches.size());
@@ -437,14 +444,15 @@ sendInitQueries(ConnState& conn)
 
     print(myId, "send", "qury", myNode, items);
     auto Msg = packAll(Msg::Query, myNode, items);
-    endpoint.send(conn.fd, std::move(Msg));
+    endpoint.send(fd, std::move(Msg));
 }
 
 void
 DistributedDiscovery::
-sendInitKeys(ConnState& conn)
+sendInitKeys(int fd)
 {
     if (data.empty()) return;
+    if (!connections.count(fd)) return;
 
     std::vector<KeyItem> items;
     items.reserve(data.size());
@@ -453,13 +461,15 @@ sendInitKeys(ConnState& conn)
         items.emplace_back(key.first, key.second.id, myNode, ttl_);
 
     print(myId, "send", "keys", items);
-    endpoint.send(conn.fd, packAll(Msg::Keys, items));
+    endpoint.send(fd, packAll(Msg::Keys, items));
 }
 
 void
 DistributedDiscovery::
-sendInitNodes(ConnState& conn)
+sendInitNodes(int fd)
 {
+    if (!connections.count(fd)) return;
+
     double now = lockless::wall();
     size_t numPicks = lockless::log2(nodes.size());
 
@@ -475,7 +485,7 @@ sendInitNodes(ConnState& conn)
     }
 
     print(myId, "send", "node", items);
-    endpoint.send(conn.fd, packAll(Msg::Nodes, items));
+    endpoint.send(fd, packAll(Msg::Nodes, items));
 }
 
 
@@ -601,9 +611,7 @@ sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
     int fd = socket.fd();
     print(myId, "conn", fd, node);
 
-    auto connIt = connections.find(fd);
-    assert(connIt == connections.end());
-
+    assert(!connections.count(fd));
     connections[fd].fetch(key, keyId);
     endpoint.connect(std::move(socket));
 }
