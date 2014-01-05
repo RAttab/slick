@@ -7,6 +7,7 @@
 
 #include "socket.h"
 #include "utils.h"
+#include "lockless/tls.h"
 
 #include <array>
 #include <string>
@@ -80,7 +81,7 @@ struct InterfaceIt
         struct addrinfo hints;
         std::memset(&hints, 0, sizeof hints);
 
-        hints.ai_flags = host ? AI_PASSIVE : 0;
+        hints.ai_flags = !host ? AI_PASSIVE : 0;
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
