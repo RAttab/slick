@@ -129,7 +129,7 @@ Watch(WatchFn watch) : watch(std::move(watch))
 
 namespace Msg {
 
-static const std::string Init =  "_slick_disc_";
+static const char* Init =  "_slick_disc_";
 static constexpr uint32_t Version = 1;
 
 typedef uint16_t Type;
@@ -648,6 +648,9 @@ ConstPackIt
 DistributedDiscovery::
 onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
+    // Make sure we disconnect when we're done.
+    auto connGuard = guard([&] { endpoint.disconnect(conn.fd); });
+
     std::vector<DataItem> items;
     it = unpack(items, it, last);
 
@@ -661,11 +664,13 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
         auto it = watches.find(key);
         if (it == watches.end()) continue;
 
-        for (const auto& watch : it->second)
+        // The copy is necessary because the callback could modify watches
+        // (eg. call retract()) which would invalidate our iterator.
+        auto toTrigger = it->second;
+        for (const auto& watch : toTrigger)
             watch.watch(watch.handle, payload);
     }
 
-    endpoint.disconnect(conn.fd);
     return last;
 }
 

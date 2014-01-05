@@ -23,21 +23,17 @@ template<typename T>
 double waitFor(T& value)
 {
     double start = lockless::wall();
-    while (!value) lockless::sleep(1);
+    while (!value) std::this_thread::yield();
     return lockless::wall() - start;
 }
 
-const char* fmt(const std::vector<Address>& node)
+void print(const char* name, const DistributedDiscovery& node)
 {
-    stringstream ss; ss << "[ ";
-    for (const auto& addr : node) ss << addr.toString() << " ";
-    ss << "]";
-    return ss.str().c_str();
-}
-
-const char* fmt(const UUID& uuid)
-{
-    return uuid.toString().c_str();
+    stringstream ss;
+    ss << name << ": " << node.id().toString() << " -> [ ";
+    for (const auto& addr : node.node()) ss << addr.toString() << " ";
+    ss << "]" << endl;
+    cerr << ss.str();
 }
 
 BOOST_AUTO_TEST_CASE(basics)
@@ -60,7 +56,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
     DistributedDiscovery node0({}, Port0);
     node0.setPeriod(Period);
-    printf("node0: %s -> %s\n", fmt(node0.id()), fmt(node0.node()));
+    print("node0", node0);
 
     PollThread poller0;
     poller0.add(node0);
@@ -69,7 +65,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
     DistributedDiscovery node1({ Address("localhost", Port0) }, Port1);
     node1.setPeriod(Period);
-    printf("node1: %s -> %s\n", fmt(node1.id()), fmt(node1.node()));
+    print("node1", node0);
 
     PollThread poller1;
     poller1.add(node1);
