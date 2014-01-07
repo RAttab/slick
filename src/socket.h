@@ -154,7 +154,8 @@ private:
 
 struct PassiveSockets
 {
-    explicit PassiveSockets(Port port, int flags = 0);
+    PassiveSockets() {}
+    explicit PassiveSockets(Port port);
     ~PassiveSockets();
 
     PassiveSockets(const PassiveSockets&) = delete;
@@ -163,6 +164,7 @@ struct PassiveSockets
     PassiveSockets(PassiveSockets&&) = default;
     PassiveSockets& operator=(PassiveSockets&&) = default;
 
+    operator bool() const { return !fds_.empty(); }
 
     const std::vector<int>& fds() { return fds_; }
     bool test(int fd)
