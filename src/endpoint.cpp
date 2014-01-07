@@ -23,6 +23,8 @@ Endpoint()
 {
     using namespace std::placeholders;
 
+    poller.add(disconnectQueueFd.fd());
+
     typedef void (Endpoint::*SendFn) (int, Payload&&);
     sends.onOperation = std::bind((SendFn)&Endpoint::send, this, _1, _2);
     poller.add(sends.fd());
@@ -31,11 +33,12 @@ Endpoint()
     broadcasts.onOperation = std::bind((BroadcastFn)&Endpoint::broadcast, this, _1);
     poller.add(broadcasts.fd());
 
-    typedef void (Endpoint::*ConnectFn) (Socket&& socket);
+    typedef void (Endpoint::*ConnectFn) (Socket&&);
     connects.onOperation = std::bind((ConnectFn)&Endpoint::connect, this, _1);
     poller.add(connects.fd());
 
-    disconnects.onOperation = std::bind(&Endpoint::doDisconnect, this, _1);
+    typedef void (Endpoint::*DisconnectFn) (int);
+    disconnects.onOperation = std::bind((DisconnectFn)&Endpoint::doDisconnect, this, _1);
     poller.add(disconnects.fd());
 
     onError = [=] (int, int errnum) {
@@ -113,6 +116,9 @@ poll(int timeoutMs)
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
+        else if (ev.data.fd == disconnectQueueFd.fd())
+            doDisconnect(std::move(disconnectQueue));
+
         else if (ev.data.fd == sends.fd())       sends.poll(DeferCap);
         else if (ev.data.fd == broadcasts.fd())  broadcasts.poll(DeferCap);
         else if (ev.data.fd == connects.fd())    connects.poll(DeferCap);
@@ -189,8 +195,16 @@ disconnect(int fd)
 
     it->second.dead = true;
 
-    bool ret = disconnects.tryDefer(fd);
-    assert(ret); // There's no real solution for this sadly.
+    disconnectQueue.emplace_back(fd);
+    disconnectQueueFd.signal();
+}
+
+void
+Endpoint::
+doDisconnect(std::vector<int> fds)
+{
+    while (disconnectQueueFd.poll());
+    for (int fd : fds) doDisconnect(fd);
 }
 
 void
@@ -356,6 +370,9 @@ send(int fd, Payload&& data)
         return;
     }
 
+    if (it->second.dead)
+        dropPayload(fd, std::move(data));
+
     if (!sendTo(it->second, std::move(data))) {
         dropPayload(fd, std::move(data));
         disconnect(it->first);
@@ -375,9 +392,14 @@ broadcast(Payload&& data)
 
     std::vector<int> toDisconnect;
 
-    for (auto& connection : connections) {
-        if (!sendTo(connection.second, data))
-            toDisconnect.push_back(connection.first);
+    for (auto& conn : connections) {
+        if (conn.second.dead)
+            dropPayload(conn.first, data);
+
+        if (!sendTo(conn.second, data)) {
+            dropPayload(conn.first, data);
+            toDisconnect.push_back(conn.first);
+        }
     }
 
     for (int fd : toDisconnect) disconnect(fd);

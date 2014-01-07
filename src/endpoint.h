@@ -99,6 +99,7 @@ private:
     void flushQueue(int fd);
     void onOperation(Operation&& op);
 
+    void doDisconnect(std::vector<int> fd);
     void doDisconnect(int fd);
 
     IsPollThread isPollThread;
@@ -127,6 +128,11 @@ private:
     };
 
     std::unordered_map<int, ConnectionState> connections;
+
+    // Need a seperate queue that can't block when defering from within the
+    // polling thread.
+    std::vector<int> disconnectQueue;
+    Notify disconnectQueueFd;
 
     enum { SendSize = 1 << 6 };
     Defer<SendSize, int, Payload> sends;
