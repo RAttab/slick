@@ -99,6 +99,7 @@ struct IsPollThread
     void set() { pollThread = lockless::threadId(); }
     void unset() { pollThread = 0; }
 
+    bool isPolling() { return pollThread; }
     bool operator() () const
     {
         return !pollThread || pollThread == lockless::threadId();

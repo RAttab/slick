@@ -35,7 +35,7 @@ Endpoint()
     connects.onOperation = std::bind((ConnectFn)&Endpoint::connect, this, _1);
     poller.add(connects.fd());
 
-    disconnects.onOperation = std::bind(&Endpoint::disconnect, this, _1);
+    disconnects.onOperation = std::bind(&Endpoint::doDisconnect, this, _1);
     poller.add(disconnects.fd());
 
     onError = [=] (int, int errnum) {
@@ -173,11 +173,30 @@ void
 Endpoint::
 disconnect(int fd)
 {
+    if (!isPollThread.isPolling()) {
+        doDisconnect(fd);
+        return;
+    }
+
     if (!isPollThread()) {
         disconnects.defer(fd);
         return;
     }
 
+    auto it = connections.find(fd);
+    if (it == connections.end() || it->second.dead)
+        return;
+
+    it->second.dead = true;
+
+    bool ret = disconnects.tryDefer(fd);
+    assert(ret); // There's no real solution for this sadly.
+}
+
+void
+Endpoint::
+doDisconnect(int fd)
+{
     auto it = connections.find(fd);
     assert(it != connections.end());
 
@@ -396,7 +415,6 @@ flushQueue(int fd)
 /* PASSIVE ENDPOINT BASE                                                      */
 /******************************************************************************/
 
-
 PassiveEndpoint::
 PassiveEndpoint(Port port) :
     sockets(port, SOCK_NONBLOCK)
@@ -425,7 +443,5 @@ onPollEvent(struct epoll_event& ev)
     while (socket = Socket::accept(ev.data.fd))
         connect(std::move(socket));
 }
-
-
 
 } // slick

@@ -99,11 +99,15 @@ private:
     void flushQueue(int fd);
     void onOperation(Operation&& op);
 
+    void doDisconnect(int fd);
+
     IsPollThread isPollThread;
 
     struct ConnectionState
     {
-        ConnectionState() : bytesSent(0), bytesRecv(0), writable(false) {}
+        ConnectionState() :
+            bytesSent(0), bytesRecv(0), dead(false), writable(false)
+        {}
 
         ConnectionState(ConnectionState&&) = default;
         ConnectionState& operator=(ConnectionState&&) = default;
@@ -116,6 +120,7 @@ private:
         size_t bytesSent;
         size_t bytesRecv;
 
+        bool dead;
         bool writable;
         std::vector<std::pair<Payload, size_t> > sendQueue;
         std::vector<Payload> recvQueue;
