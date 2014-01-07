@@ -49,7 +49,7 @@ void runProvider(Port port)
 {
     size_t recv = 0, dropped = 0;
 
-    PassiveEndpoint provider(port);
+    Endpoint provider(port);
 
     provider.onNewConnection = [] (int fd) {
         fprintf(stderr, "\nprv: new %d\n", fd);;

@@ -215,7 +215,7 @@ private:
 
     SourcePoller poller;
     IsPollThread isPollThread;
-    PassiveEndpoint endpoint;
+    Endpoint endpoint;
     Timer timer;
 
 

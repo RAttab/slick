@@ -28,11 +28,11 @@ namespace slick {
 struct Endpoint
 {
     Endpoint();
+    Endpoint(Port listenPort);
     virtual ~Endpoint();
 
     Endpoint(const Endpoint&) = delete;
     Endpoint& operator=(const Endpoint&) = delete;
-
 
     typedef std::function<void(int fd)> ConnectionFn;
     ConnectionFn onNewConnection;
@@ -49,6 +49,8 @@ struct Endpoint
     int fd() const { return poller.fd(); }
     void poll(int timeoutMs = 0);
     void shutdown();
+
+    void listen(Port listenPort);
 
     void send(int fd, Payload&& data);
     void send(int fd, const Payload& data)
@@ -70,19 +72,15 @@ struct Endpoint
 
     void disconnect(int fd);
 
-protected:
-
-    virtual void onPollEvent(struct epoll_event&)
-    {
-        throw std::logic_error("unknown epoll event");
-    }
-
-    Epoll poller;
 
 private:
 
     struct Operation;
     struct ConnectionState;
+
+    void init();
+
+    void accept(int fd);
 
     void recvPayload(int fd);
     uint8_t* processRecvBuffer(uint8_t*, uint8_t*, std::vector<Payload>&);
@@ -102,7 +100,10 @@ private:
     void doDisconnect(std::vector<int> fd);
     void doDisconnect(int fd);
 
+
+    Epoll poller;
     IsPollThread isPollThread;
+
 
     struct ConnectionState
     {
@@ -128,6 +129,8 @@ private:
 
     std::unordered_map<int, ConnectionState> connections;
 
+    PassiveSockets listenSockets;
+
     // Need a seperate queue that can't block when defering from within the
     // polling thread.
     std::vector<int> disconnectQueue;
@@ -142,23 +145,6 @@ private:
     Defer<ConnectSize, int> disconnects;
 
     enum { DeferCap = 1 << 6 };
-};
-
-
-/******************************************************************************/
-/* PASSIVE ENDPOINT BASE                                                      */
-/******************************************************************************/
-
-struct PassiveEndpoint : public Endpoint
-{
-    PassiveEndpoint(Port port);
-    virtual ~PassiveEndpoint();
-
-protected:
-    virtual void onPollEvent(struct epoll_event& ev);
-
-private:
-    PassiveSockets sockets;
 };
 
 

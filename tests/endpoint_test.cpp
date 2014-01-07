@@ -56,7 +56,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
     PollThread poller;
 
-    PassiveEndpoint provider(listenPort);
+    Endpoint provider(listenPort);
     poller.add(provider);
 
     provider.onNewConnection = [] (int fd) {
@@ -122,15 +122,15 @@ BOOST_AUTO_TEST_CASE(n_to_n)
 
     PollThread provPoller;
 
-    array<shared_ptr<PassiveEndpoint>, N> providers;
+    array<shared_ptr<Endpoint>, N> providers;
     array<size_t, N> clientIdSums;
     clientIdSums.fill(0);
 
     for (size_t id = 0; id < N; ++id) {
-        providers[id] = make_shared<PassiveEndpoint>(listenPortStart + id);
+        providers[id] = make_shared<Endpoint>(listenPortStart + id);
         provPoller.add(*providers[id]);
 
-        weak_ptr<PassiveEndpoint> prov(providers[id]);
+        weak_ptr<Endpoint> prov(providers[id]);
         providers[id]->onPayload = [=, &clientIdSums] (int fd, Payload&& data) {
             clientIdSums[id] += unpack<size_t>(data);
 
@@ -205,7 +205,7 @@ BOOST_AUTO_TEST_CASE(nice_disconnect)
 
     PollThread poller;
 
-    PassiveEndpoint provider(listenPort);
+    Endpoint provider(listenPort);
     poller.add(provider);
 
     provider.onNewConnection = [&] (int fd) {
@@ -248,7 +248,7 @@ BOOST_AUTO_TEST_CASE(hard_disconnect)
 
         PollThread poller;
 
-        PassiveEndpoint provider(listenPort);
+        Endpoint provider(listenPort);
         poller.add(provider);
 
         provider.onNewConnection = [&] (int fd) {

@@ -21,6 +21,23 @@ namespace slick {
 Endpoint::
 Endpoint()
 {
+    init();
+}
+
+Endpoint::
+Endpoint(Port listenPort)
+{
+    init();
+
+    listenSockets = PassiveSockets(listenPort);
+    for (int fd : listenSockets.fds())
+        poller.add(fd, EPOLLET | EPOLLIN);
+}
+
+void
+Endpoint::
+init()
+{
     using namespace std::placeholders;
 
     poller.add(disconnectQueueFd.fd());
@@ -58,8 +75,12 @@ Endpoint::
     for (const auto& connection : connections)
         toDisconnect.push_back(connection.first);
 
+    doDisconnect(std::move(disconnectQueue));
     for (int fd : toDisconnect)
-        disconnect(fd);
+        doDisconnect(fd);
+
+    for (int fd : listenSockets.fds())
+        poller.del(fd);
 }
 
 void
@@ -67,6 +88,8 @@ Endpoint::
 shutdown()
 {
     isPollThread.unset();
+
+    doDisconnect(std::move(disconnectQueue));
 
     // flush any pending ops.
     sends.poll();
@@ -116,6 +139,8 @@ poll(int timeoutMs)
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
         }
 
+        else if (listenSockets.test(ev.data.fd)) accept(ev.data.fd);
+
         else if (ev.data.fd == disconnectQueueFd.fd())
             doDisconnect(std::move(disconnectQueue));
 
@@ -124,10 +149,27 @@ poll(int timeoutMs)
         else if (ev.data.fd == connects.fd())    connects.poll(DeferCap);
         else if (ev.data.fd == disconnects.fd()) disconnects.poll(DeferCap);
 
-        else onPollEvent(ev);
+        else assert(false);
     }
 }
 
+
+void
+Endpoint::
+listen(Port listenPort)
+{
+    for (int fd : listenSockets.fds()) poller.del(fd);
+    listenSockets = PassiveSockets(listenPort);
+}
+
+void
+Endpoint::
+accept(int fd)
+{
+    Socket socket;
+    while (socket = Socket::accept(fd))
+        connect(std::move(socket));
+}
 
 void
 Endpoint::
@@ -430,40 +472,6 @@ flushQueue(int fd)
         dropPayload(fd, std::move(queue[i].first));
 
     disconnect(fd);
-}
-
-
-/******************************************************************************/
-/* PASSIVE ENDPOINT BASE                                                      */
-/******************************************************************************/
-
-PassiveEndpoint::
-PassiveEndpoint(Port port) :
-    sockets(port, SOCK_NONBLOCK)
-{
-    for (int fd : sockets.fds())
-        poller.add(fd, EPOLLET | EPOLLIN);
-}
-
-
-PassiveEndpoint::
-~PassiveEndpoint()
-{
-    for (int fd : sockets.fds())
-        poller.del(fd);
-}
-
-
-void
-PassiveEndpoint::
-onPollEvent(struct epoll_event& ev)
-{
-    assert(ev.events == EPOLLIN);
-    assert(sockets.test(ev.data.fd));
-
-    Socket socket;
-    while (socket = Socket::accept(ev.data.fd))
-        connect(std::move(socket));
 }
 
 } // slick
