@@ -149,7 +149,8 @@ connect(const Address& addr)
 
     for (InterfaceIt it(addr.chost(), addr.port); it; it++) {
 
-        int fd = ::socket(it->ai_family, it->ai_socktype | SOCK_NONBLOCK, it->ai_protocol);
+        int flags = SOCK_NONBLOCK;
+        int fd = ::socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
         FdGuard guard(fd);
@@ -242,10 +243,11 @@ throwError() const
 /******************************************************************************/
 
 PassiveSockets::
-PassiveSockets(Port port, int flags)
+PassiveSockets(Port port)
 {
     for (InterfaceIt it(nullptr, port); it; it++) {
 
+        int flags = SOCK_NONBLOCK;
         int fd = socket(it->ai_family, it->ai_socktype | flags, it->ai_protocol);
         if (fd < 0) continue;
 
