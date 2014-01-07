@@ -85,7 +85,7 @@ private:
     struct ConnectionState;
 
     void recvPayload(int fd);
-    uint8_t* processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last);
+    uint8_t* processRecvBuffer(uint8_t*, uint8_t*, std::vector<Payload>&);
 
     template<typename Payload>
     void pushToSendQueue(ConnectionState& conn, Payload&& data, size_t offset);
@@ -124,7 +124,6 @@ private:
         bool dead;
         bool writable;
         std::vector<std::pair<Payload, size_t> > sendQueue;
-        std::vector<Payload> recvQueue;
     };
 
     std::unordered_map<int, ConnectionState> connections;

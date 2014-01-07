@@ -228,7 +228,7 @@ doDisconnect(int fd)
 
 uint8_t*
 Endpoint::
-processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
+processRecvBuffer(uint8_t* first, uint8_t* last, std::vector<Payload>& queue)
 {
     uint8_t* it = first;
 
@@ -243,7 +243,7 @@ processRecvBuffer(ConnectionState& conn, uint8_t* first, uint8_t* last)
 
         it += data.packetSize();
         assert(data.packetSize());
-        conn.recvQueue.emplace_back(std::move(data));
+        queue.emplace_back(std::move(data));
     }
 
     assert(it == last);
@@ -256,13 +256,14 @@ recvPayload(int fd)
 {
     auto connIt = connections.find(fd);
     if (connIt == connections.end()) return;
-
     auto& conn = connIt->second;
-    conn.recvQueue.reserve(1 << 5);
 
     enum { bufferLength = 1U << 16 };
     uint8_t buffer[bufferLength];
     uint8_t* bufferIt = buffer;
+
+    std::vector<Payload> queue;
+    queue.reserve(1 << 5);
 
     bool doDisconnect = false;
 
@@ -281,12 +282,11 @@ recvPayload(int fd)
         }
 
         conn.bytesRecv += read;
-        bufferIt = processRecvBuffer(conn, buffer, bufferIt + read);
+        bufferIt = processRecvBuffer(buffer, bufferIt + read, queue);
         assert(bufferIt < (buffer + bufferLength));
     }
 
-    auto recvQueue = std::move(conn.recvQueue);
-    for (auto& data : recvQueue)
+    for (auto& data : queue)
         onPayload(fd, std::move(data));
 
     if (doDisconnect && connections.count(fd))
