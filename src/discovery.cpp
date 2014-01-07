@@ -506,15 +506,21 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
         auto& list = keys[key];
 
         auto it = list.find(value);
+
         if (it != list.end()) {
+            // We don't want to let keys expire (duplicate watches) but we don't
+            // want keys message to be spammed constantly in the network. So we
+            // only forward keys when the ttl reaches its half-life.
+            if (it->ttl(now) >= ttl_ / 2) continue;
             it->setTTL(value.ttl(now), now);
-            continue;
+        }
+        else {
+            if (watches.count(key))
+                sendFetch(key, value.id, value.addrs);
+            list.insert(value);
         }
 
-        if (watches.count(key)) sendFetch(key, value.id, value.addrs);
         toForward.emplace_back(key, value.id, value.addrs, value.ttl(now));
-
-        list.insert(std::move(value));
     }
 
     if (!toForward.empty()) {

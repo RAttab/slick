@@ -5,6 +5,9 @@
    Endpoint discovery.
 
    \todo Fix the bajillion races with watch removal.
+
+   \todo Fetch doesn't handle partitioning very well (we make one request and if
+         we disconnect that blah).
 */
 
 #pragma once
