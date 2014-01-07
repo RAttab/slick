@@ -224,31 +224,27 @@ void
 DistributedDiscovery::
 onPayload(int fd, const Payload& data)
 {
+    auto connIt = connections.find(fd);
+    assert(connIt != connections.end());
+    auto& conn = connIt->second;
+
+
     auto it = data.cbegin(), last = data.cend();
 
-    auto state = [&] (int fd) {
-        auto it = connections.find(fd);
-        return it != connections.end() ? &it->second : nullptr;
-    };
+    if (!conn.initialized()) it = onInit(conn, it, last);
 
-    ConnState* conn = state(fd);
-    if (!conn) return;
+    while (it != last) {
+        Msg::Type type;
+        it = unpack(type, it, last);
 
-    if (!conn->initialized()) {
-        it = onInit(*conn, it, last);
-        if (it == last || !(conn = state(fd))) return;
-    }
-
-    Msg::Type type;
-    it = unpack(type, it, last);
-
-    switch(type) {
-    case Msg::Keys:  it = onKeys(*conn, it, last); break;
-    case Msg::Query: it = onQuery(*conn, it, last); break;
-    case Msg::Nodes: it = onNodes(*conn, it, last); break;
-    case Msg::Fetch: it = onFetch(*conn, it, last); break;
-    case Msg::Data:  it = onData(*conn, it, last); break;
-    default: assert(false);
+        switch(type) {
+        case Msg::Keys:  it = onKeys(conn, it, last); break;
+        case Msg::Query: it = onQuery(conn, it, last); break;
+        case Msg::Nodes: it = onNodes(conn, it, last); break;
+        case Msg::Fetch: it = onFetch(conn, it, last); break;
+        case Msg::Data:  it = onData(conn, it, last); break;
+        default: assert(false);
+        }
     }
 }
 
@@ -434,7 +430,7 @@ DistributedDiscovery::
 sendInitQueries(int fd)
 {
     if (watches.empty()) return;
-    if (!connections.count(fd)) return;
+    assert(connections.count(fd));
 
     std::vector<QueryItem> items;
     items.reserve(watches.size());
@@ -452,7 +448,7 @@ DistributedDiscovery::
 sendInitKeys(int fd)
 {
     if (data.empty()) return;
-    if (!connections.count(fd)) return;
+    assert(connections.count(fd));
 
     std::vector<KeyItem> items;
     items.reserve(data.size());
@@ -468,7 +464,7 @@ void
 DistributedDiscovery::
 sendInitNodes(int fd)
 {
-    if (!connections.count(fd)) return;
+    assert(connections.count(fd));
 
     double now = lockless::wall();
     size_t numPicks = lockless::log2(nodes.size());
