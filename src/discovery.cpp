@@ -589,12 +589,12 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
 
         auto it = nodes.find(value);
         if (it != nodes.end()) {
+            if (it->ttl(now) >= ttl_ / 2) continue;
             it->setTTL(value.ttl(now), now);
-            continue;
         }
+        else nodes.insert(value);
 
         toForward.emplace_back(value.id, value.addrs, value.ttl(now));
-        nodes.insert(std::move(value));
     }
 
     if (!toForward.empty()) {
