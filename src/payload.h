@@ -75,6 +75,7 @@ struct Payload
         bytes_ = nullptr;
     }
 
+    operator bool() const { return bytes_; }
 
     iterator begin() { return bytes_; }
     const_iterator cbegin() const { return bytes_; }

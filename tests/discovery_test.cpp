@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
 
     DistributedDiscovery node0({}, Port0);
-    node0.setPeriod(Period);
+    node0.period(Period);
     print("node0", node0);
 
     PollThread poller0;
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(basics)
 
 
     DistributedDiscovery node1({ Address("localhost", Port0) }, Port1);
-    node1.setPeriod(Period);
+    node1.period(Period);
     print("node1", node0);
 
     PollThread poller1;

@@ -5,9 +5,6 @@
    Endpoint discovery.
 
    \todo Fix the bajillion races with watch removal.
-
-   \todo Fetch doesn't handle partitioning very well (we make one request and if
-         we disconnect that blah).
 */
 
 #pragma once
@@ -22,6 +19,7 @@
 #include "lockless/tm.h"
 
 #include <set>
+#include <map>
 #include <deque>
 #include <string>
 #include <functional>
@@ -86,7 +84,7 @@ struct DistributedDiscovery : public Discovery
     void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
     void connExpThresh(size_t sec = DefaultExpThresh) {connExpThresh_ = sec; }
 
-    void setPeriod(size_t sec = DefaultPeriod);
+    void period(size_t sec = DefaultPeriod);
 
     const UUID& id() const { return myId; }
     const NodeLocation& node() const { return myNode; }
@@ -95,7 +93,7 @@ private:
 
     typedef std::string QueryItem;
     typedef std::tuple<std::string, UUID> FetchItem;
-    typedef std::tuple<std::string, Payload> DataItem;
+    typedef std::tuple<std::string, UUID, Payload> DataItem;
     typedef std::tuple<UUID, NodeLocation, size_t> NodeItem;
     typedef std::tuple<std::string, UUID, NodeLocation, size_t> KeyItem;
 
@@ -198,21 +196,48 @@ private:
         }
     };
 
+    struct Fetch
+    {
+        NodeLocation node;
+        size_t delay;
+
+        explicit Fetch(NodeLocation node) :
+            node(std::move(node)), delay(1)
+        {}
+    };
+
+    struct FetchExp
+    {
+        std::string key;
+        UUID keyId;
+        double expiration;
+
+        FetchExp(std::string key, UUID keyId, size_t delay, double now = lockless::wall()) :
+            key(std::move(key)), keyId(std::move(keyId)), expiration(now + delay)
+        {}
+    };
+
 
     size_t ttl_;
+    size_t period_;
     size_t connExpThresh_;
 
     UUID myId;
     NodeLocation myNode;
 
-    std::vector<Address> seeds;
     SortedVector<Item> nodes;
+    std::vector<Address> seeds;
+
+    std::unordered_map<int, ConnState> connections;
     std::unordered_map<UUID, int> connectedNodes;
+    std::deque<ConnExpItem> connExpiration;
+
+    std::unordered_map<std::string, std::map<UUID, Fetch> > fetches;
+    std::deque<FetchExp> fetchExpiration;
+
     std::unordered_map<std::string, SortedVector<Item> > keys;
     std::unordered_map<std::string, std::set<Watch> > watches;
     std::unordered_map<std::string, Data> data;
-    std::unordered_map<int, ConnState> connections;
-    std::deque<ConnExpItem> connExpiration;
 
     std::mt19937 rng;
 
@@ -250,6 +275,7 @@ private:
 
     bool expireItem(SortedVector<Item>& list, double now);
     bool expireKeys(double now);
+    void expireFetches(double now);
     void randomDisconnect(double now);
     void randomConnect(double now);
     void seedConnect(double now);

@@ -149,12 +149,13 @@ static constexpr Type Data  = 5;
 DistributedDiscovery::
 DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
     ttl_(DefaultTTL),
+    period_(timerPeriod(DefaultPeriod)),
     connExpThresh_(DefaultExpThresh),
     myId(UUID::random()),
     seeds(seeds),
     rng(lockless::wall()),
     endpoint(port),
-    timer(timerPeriod(DefaultPeriod))
+    timer(period_)
 {
     myNode = networkInterfaces(true);
     for (auto& addr : myNode) addr.port = port;
@@ -195,9 +196,9 @@ timerPeriod(size_t base)
 
 void
 DistributedDiscovery::
-setPeriod(size_t sec)
+period(size_t sec)
 {
-    timer.setDelay(timerPeriod(sec));
+    timer.setDelay(period_ = timerPeriod(sec));
 }
 
 void
@@ -309,6 +310,8 @@ void
 DistributedDiscovery::
 publish(const std::string& key, Payload&& data)
 {
+    assert(data);
+
     if (!isPollThread()) {
         publishes.defer(key, std::move(data));
         return;
@@ -607,6 +610,10 @@ void
 DistributedDiscovery::
 sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 {
+    auto& list = fetches[key];
+    auto it = list.insert(std::make_pair(keyId, Fetch(node))).first;
+    fetchExpiration.emplace_back(key, keyId, it->second.delay);
+
     auto socket = Socket::connect(node);
     if (!socket) return;
 
@@ -635,14 +642,13 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     for (auto& item : items) {
         std::string key;
-        UUID id;
-        std::tie(key, id) = std::move(item);
+        UUID keyId;
+        std::tie(key, keyId) = std::move(item);
 
         auto it = data.find(key);
-        if (it == data.end() || it->second.id != id)
-            continue;
-
-        reply.emplace_back(key, it->second.data);
+        if (it != data.end() && it->second.id == keyId)
+            reply.emplace_back(key, keyId, it->second.data);
+        else reply.emplace_back(key, keyId, Payload());
     }
 
     if (!reply.empty()) {
@@ -668,15 +674,22 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
     for (auto& item : items) {
         std::string key;
+        UUID keyId;
         Payload payload;
-        std::tie(key, payload) = std::move(item);
+        std::tie(key, keyId, payload) = std::move(item);
 
-        auto it = watches.find(key);
-        if (it == watches.end()) continue;
+        auto fetchIt = fetches.find(key);
+        if (fetchIt != fetches.end()) {
+            fetchIt->second.erase(keyId);
+            if (fetchIt->second.empty()) fetches.erase(fetchIt);
+        }
 
-        // The copy is necessary because the callback could modify watches
-        // (eg. call retract()) which would invalidate our iterator.
-        auto toTrigger = it->second;
+        if (!payload) continue;
+
+        auto watchIt = watches.find(key);
+        if (watchIt == watches.end()) continue;
+
+        auto toTrigger = watchIt->second;
         for (const auto& watch : toTrigger)
             watch.watch(watch.handle, payload);
     }
@@ -694,6 +707,7 @@ onTimer(size_t)
 
     while(!nodes.empty() && expireItem(nodes, now));
     while(!keys.empty() && expireKeys(now));
+    expireFetches(now);
     randomDisconnect(now);
     randomConnect(now);
     seedConnect(now);
@@ -723,8 +737,31 @@ expireKeys(double now)
     auto it = pickRandom(keys.begin(), keys.end(), rng);
     if (!expireItem(it->second, now)) return false;
 
+    // \todo cleanup fetches.
+
     if (it->second.empty()) keys.erase(it);
     return true;
+}
+
+void
+DistributedDiscovery::
+expireFetches(double now)
+{
+    while (!fetchExpiration.empty()) {
+        if (fetchExpiration.front().expiration >= now) return;
+
+        FetchExp item = fetchExpiration.front();
+        fetchExpiration.pop_front();
+
+        auto keyIt = fetches.find(item.key);
+        if (keyIt == fetches.end()) continue;
+
+        auto it = keyIt->second.find(item.keyId);
+        if (it == keyIt->second.end()) continue;
+
+        it->second.delay++;
+        sendFetch(item.key, item.keyId, it->second.node);
+    }
 }
 
 void
