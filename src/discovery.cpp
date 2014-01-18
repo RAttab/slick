@@ -274,7 +274,7 @@ discover(const std::string& key, Watch&& watch)
     if (!watches.count(key)) {
         std::vector<QueryItem> items = { key };
         print(myId, "brod", "qury", myNode, items);
-        endpoint.broadcast(packAll(Msg::Query, myNode, items));
+        endpoint.multicast(edges, packAll(Msg::Query, myNode, items));
     }
 
     watches[key].insert(std::move(watch));
@@ -326,7 +326,7 @@ publish(const std::string& key, Payload&& data)
     items.emplace_back(key, item.id, myNode, ttl_);
 
     print(myId, "brod", "keys", items);
-    endpoint.broadcast(packAll(Msg::Keys, items));
+    endpoint.multicast(edges, packAll(Msg::Keys, items));
 
     this->data[key] = std::move(item);
 }
@@ -358,12 +358,13 @@ onConnect(int fd)
     Payload data;
 
     if (conn.pendingFetch.empty()) {
-        print(myId, "send", "init", Msg::Version, myId);
+        edges.insert(conn.fd);
+        print(myId, "send", "init", fd, Msg::Version, myId);
         data = pack(head);
     }
     else {
-        print(myId, "send", "init", Msg::Version, myId, "ftch", conn.pendingFetch);
         data = packAll(head, Msg::Fetch, conn.pendingFetch);
+        print(myId, "send", "init", fd, Msg::Version, myId, "ftch", conn.pendingFetch, data);
         conn.pendingFetch.clear();
     }
 
@@ -381,6 +382,7 @@ onDisconnect(int fd)
     const auto& conn = it->second;
     print(myId, "disc", fd, conn.id, conn.nodeId, conn.version);
 
+    edges.erase(conn.fd);
     connectedNodes.erase(conn.nodeId);
     connections.erase(it);
 }
@@ -395,13 +397,13 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
     it = unpackAll(it, last, init, conn.version, nodeId);
 
     if (init != Msg::Init) {
-        print(myId, "!err", "init-wrong-head", conn.fd, init);
+        print(myId, "!err", "init-wrong-head", conn.fd, init, size_t(last - it));
         endpoint.disconnect(conn.fd);
         return last;
     }
     assert(conn.version == Msg::Version);
 
-    print(myId, "recv", "init", conn.version, nodeId, it == last);
+    print(myId, "recv", "init", conn.fd, conn.version, nodeId, it == last);
 
     if (!conn.nodeId) {
         conn.nodeId = nodeId;
@@ -443,7 +445,7 @@ sendInitQueries(int fd)
     for (const auto& watch : watches)
         items.emplace_back(watch.first);
 
-    print(myId, "send", "qury", myNode, items);
+    print(myId, "send", "qury", fd, myNode, items);
     auto Msg = packAll(Msg::Query, myNode, items);
     endpoint.send(fd, std::move(Msg));
 }
@@ -461,7 +463,7 @@ sendInitKeys(int fd)
     for (const auto& key : data)
         items.emplace_back(key.first, key.second.id, myNode, ttl_);
 
-    print(myId, "send", "keys", items);
+    print(myId, "send", "keys", fd, items);
     endpoint.send(fd, packAll(Msg::Keys, items));
 }
 
@@ -485,19 +487,19 @@ sendInitNodes(int fd)
         items.emplace_back(node.id, node.addrs, ttl);
     }
 
-    print(myId, "send", "node", items);
+    print(myId, "send", "node", fd, items);
     endpoint.send(fd, packAll(Msg::Nodes, items));
 }
 
 
 ConstPackIt
 DistributedDiscovery::
-onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
+onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<KeyItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "recv", "keys", items);
+    print(myId, "recv", "keys", conn.fd, items);
 
     std::vector<KeyItem> toForward;
     toForward.reserve(items.size());
@@ -529,8 +531,8 @@ onKeys(ConnState&, ConstPackIt it, ConstPackIt last)
     }
 
     if (!toForward.empty()) {
-        print(myId, "fwrd", "keys", toForward);
-        endpoint.broadcast(packAll(Msg::Keys, toForward));
+        print(myId, "fwrd", "keys", conn.fd, toForward);
+        endpoint.multicast(edges, packAll(Msg::Keys, toForward));
     }
 
     return it;
@@ -545,7 +547,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
 
-    print(myId, "recv", "qury", node, items);
+    print(myId, "recv", "qury", conn.fd, node, items);
 
     std::vector<KeyItem> reply;
     reply.reserve(items.size());
@@ -563,7 +565,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty()) {
-        print(myId, "repl", "keys", reply);
+        print(myId, "repl", "keys", conn.fd, reply);
         endpoint.send(conn.fd, packAll(Msg::Keys, reply));
     }
 
@@ -573,12 +575,12 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 ConstPackIt
 DistributedDiscovery::
-onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
+onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<NodeItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "recv", "node", items);
+    print(myId, "recv", "node", conn.fd, items);
 
     std::vector<NodeItem> toForward;
     toForward.reserve(items.size());
@@ -600,8 +602,8 @@ onNodes(ConnState&, ConstPackIt it, ConstPackIt last)
     }
 
     if (!toForward.empty()) {
-        print(myId, "fwrd", "node", toForward);
-        endpoint.broadcast(packAll(Msg::Nodes, toForward));
+        print(myId, "fwrd", "node", conn.fd, toForward);
+        endpoint.multicast(edges, packAll(Msg::Nodes, toForward));
     }
 
     return it;
@@ -634,7 +636,7 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<FetchItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "recv", "ftch", items);
+    print(myId, "recv", "ftch", conn.fd, items);
 
     for (const auto& blah : data)
         print(myId, "kydb", blah.first, blah.second.id, blah.second.data);
@@ -654,7 +656,7 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
     }
 
     if (!reply.empty()) {
-        print(myId, "repl", "data", reply);
+        print(myId, "repl", "data", conn.fd, reply);
         endpoint.send(conn.fd, packAll(Msg::Data, reply));
     }
 
@@ -672,7 +674,7 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
     std::vector<DataItem> items;
     it = unpack(items, it, last);
 
-    print(myId, "recv", "data", items);
+    print(myId, "recv", "data", conn.fd, items);
 
     for (auto& item : items) {
         std::string key;

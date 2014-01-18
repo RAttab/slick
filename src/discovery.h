@@ -231,6 +231,7 @@ private:
     std::unordered_map<int, ConnState> connections;
     std::unordered_map<UUID, int> connectedNodes;
     std::deque<ConnExpItem> connExpiration;
+    SortedVector<int> edges;
 
     std::unordered_map<std::string, std::map<UUID, Fetch> > fetches;
     std::deque<FetchExp> fetchExpiration;
