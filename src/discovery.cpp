@@ -301,8 +301,10 @@ forget(const std::string& key, WatchHandle handle)
     auto& list = it->second;
     list.erase(Watch(handle));
 
-    if (list.empty())
+    if (list.empty()) {
         watches.erase(key);
+        fetches.erase(key);
+    }
 }
 
 
@@ -705,7 +707,7 @@ onTimer(size_t)
     double now = lockless::wall();
     print(myId, "tick", size_t(now), nodes.size(), lockless::log2(nodes.size()));
 
-    while(!nodes.empty() && expireItem(nodes, now));
+    while(!nodes.empty() && expireItem(nodes, now).first);
     while(!keys.empty() && expireKeys(now));
     expireFetches(now);
     randomDisconnect(now);
@@ -713,18 +715,19 @@ onTimer(size_t)
     seedConnect(now);
 }
 
-bool
+std::pair<bool, UUID>
 DistributedDiscovery::
 expireItem(SortedVector<Item>& list, double now)
 {
     assert(!list.empty());
 
     auto it = pickRandom(list.begin(), list.end(), rng);
-    if (it->ttl(now)) return false;
+    if (it->ttl(now)) return std::make_pair(false, UUID());
 
+    UUID id = it->id;
     print(myId, "expr", it->id, it->ttl(now));
     list.erase(it);
-    return true;
+    return std::make_pair(true, id);
 }
 
 
@@ -735,9 +738,11 @@ expireKeys(double now)
     assert(!keys.empty());
 
     auto it = pickRandom(keys.begin(), keys.end(), rng);
-    if (!expireItem(it->second, now)) return false;
 
-    // \todo cleanup fetches.
+    auto res = expireItem(it->second, now);
+    if (!res.first) return false;
+
+    fetches[it->first].erase(res.second);
 
     if (it->second.empty()) keys.erase(it);
     return true;

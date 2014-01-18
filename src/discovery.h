@@ -273,7 +273,7 @@ private:
     void sendInitNodes(int fd);
     void sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
 
-    bool expireItem(SortedVector<Item>& list, double now);
+    std::pair<bool, UUID> expireItem(SortedVector<Item>& list, double now);
     bool expireKeys(double now);
     void expireFetches(double now);
     void randomDisconnect(double now);
