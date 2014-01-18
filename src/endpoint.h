@@ -13,6 +13,7 @@
 #include "poll.h"
 #include "payload.h"
 #include "defer.h"
+#include "sorted_vector.h"
 
 #include <vector>
 #include <functional>
@@ -58,13 +59,18 @@ struct Endpoint
         send(fd, Payload(data));
     }
 
+    void multicast(const SortedVector<int>& fds, Payload&& data);
+    void multicast(const SortedVector<int>& fds, const Payload& data)
+    {
+        multicast(fds, Payload(data));
+    }
+
     void broadcast(Payload&& data);
     void broadcast(const Payload& data)
     {
         broadcast(Payload(data));
     }
 
-    // \todo Would be nice to have multicast support.
 
     void connect(Socket&& socket);
     int connect(const Address& addr);
@@ -139,6 +145,7 @@ private:
 
     enum { SendSize = 1 << 6 };
     Defer<SendSize, int, Payload> sends;
+    Defer<SendSize, SortedVector<int>, Payload> multicasts;
     Defer<SendSize, Payload> broadcasts;
 
     enum { ConnectSize = 1 << 4 };

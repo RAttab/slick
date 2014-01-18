@@ -46,6 +46,10 @@ init()
     sends.onOperation = std::bind((SendFn)&Endpoint::send, this, _1, _2);
     poller.add(sends.fd());
 
+    typedef void (Endpoint::*MulticastFn) (const SortedVector<int>&, Payload&&);
+    multicasts.onOperation = std::bind((MulticastFn)&Endpoint::multicast, this, _1, _2);
+    poller.add(multicasts.fd());
+
     typedef void (Endpoint::*BroadcastFn) (Payload&&);
     broadcasts.onOperation = std::bind((BroadcastFn)&Endpoint::broadcast, this, _1);
     poller.add(broadcasts.fd());
@@ -421,6 +425,37 @@ send(int fd, Payload&& data)
     }
 }
 
+void
+Endpoint::
+multicast(const SortedVector<int>& fds, Payload&& data)
+{
+    if (fds.size() == 1) {
+        send(fds.front(), std::move(data));
+        return;
+    }
+
+    if (!isPollThread()) {
+        if (!multicasts.tryDefer(fds, data)) {
+            for (int fd : fds)
+                dropPayload(fd, std::move(data));
+        }
+        return;
+    }
+
+    for (int fd : fds) {
+        auto it = connections.find(fd);
+
+        if (it == connections.end()) {
+            dropPayload(fd, data);
+            continue;
+        }
+
+        if (!sendTo(it->second, data)) {
+            dropPayload(fd, data);
+            disconnect(fd);
+        }
+    }
+}
 
 void
 Endpoint::
