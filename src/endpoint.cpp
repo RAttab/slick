@@ -135,8 +135,8 @@ poll(int timeoutMs)
                     disconnect(ev.data.fd);
             }
 
-            if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
             if (ev.events & EPOLLOUT) flushQueue(ev.data.fd);
+            if (ev.events & EPOLLIN) recvPayload(ev.data.fd);
         }
 
         else if (listenSockets.test(ev.data.fd)) accept(ev.data.fd);
@@ -189,8 +189,6 @@ connect(Socket&& socket)
     ConnectionState connection;
     connection.socket = std::move(socket);
     connections[fd] = std::move(connection);
-
-    if (onNewConnection) onNewConnection(fd);
 }
 
 int
@@ -232,10 +230,10 @@ disconnect(int fd)
     }
 
     auto it = connections.find(fd);
-    if (it == connections.end() || it->second.dead)
+    if (it == connections.end() || !it->second.connected || it->second.disconnected)
         return;
 
-    it->second.dead = true;
+    it->second.disconnected = true;
 
     disconnectQueue.emplace_back(fd);
     disconnectQueueFd.signal();
@@ -354,6 +352,11 @@ bool
 Endpoint::
 sendTo(Endpoint::ConnectionState& conn, Payload&& data, size_t offset)
 {
+    if (conn.disconnected) {
+        dropPayload(conn.socket.fd(), std::forward<Payload>(data));
+        return true;
+    }
+
     if (!conn.writable) {
         pushToSendQueue(conn, std::forward<Payload>(data), 0);
         return true;
@@ -412,9 +415,6 @@ send(int fd, Payload&& data)
         return;
     }
 
-    if (it->second.dead)
-        dropPayload(fd, std::move(data));
-
     if (!sendTo(it->second, std::move(data))) {
         dropPayload(fd, std::move(data));
         disconnect(it->first);
@@ -432,19 +432,12 @@ broadcast(Payload&& data)
         return;
     }
 
-    std::vector<int> toDisconnect;
-
     for (auto& conn : connections) {
-        if (conn.second.dead)
-            dropPayload(conn.first, data);
-
         if (!sendTo(conn.second, data)) {
             dropPayload(conn.first, data);
-            toDisconnect.push_back(conn.first);
+            disconnect(conn.second.socket.fd());
         }
     }
-
-    for (int fd : toDisconnect) disconnect(fd);
 }
 
 
@@ -456,6 +449,11 @@ flushQueue(int fd)
     if (it == connections.end()) return;
 
     auto& conn = it->second;
+
+    if (!conn.connected) {
+        if (onNewConnection) onNewConnection(conn.socket.fd());
+        conn.connected = true;
+    }
     conn.writable = true;
 
     auto queue = std::move(conn.sendQueue);

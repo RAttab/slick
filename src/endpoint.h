@@ -104,11 +104,11 @@ private:
     Epoll poller;
     IsPollThread isPollThread;
 
-
     struct ConnectionState
     {
         ConnectionState() :
-            bytesSent(0), bytesRecv(0), dead(false), writable(false)
+            bytesSent(0), bytesRecv(0),
+            connected(false), disconnected(false), writable(false)
         {}
 
         ConnectionState(ConnectionState&&) = default;
@@ -122,7 +122,8 @@ private:
         size_t bytesSent;
         size_t bytesRecv;
 
-        bool dead;
+        bool connected;
+        bool disconnected;
         bool writable;
         std::vector<std::pair<Payload, size_t> > sendQueue;
     };
