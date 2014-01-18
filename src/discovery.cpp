@@ -181,6 +181,9 @@ DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
     forgets.onOperation = std::bind(&DistributedDiscovery::forget, this, _1, _2);
     poller.add(forgets);
 
+    losts.onOperation = std::bind(&DistributedDiscovery::lost, this, _1, _2);
+    poller.add(losts);
+
     timer.onTimer = bind(&DistributedDiscovery::onTimer, this, _1);
     poller.add(timer);
 }
@@ -307,6 +310,24 @@ forget(const std::string& key, WatchHandle handle)
     }
 }
 
+void
+DistributedDiscovery::
+lost(const std::string& key, const UUID& keyId)
+{
+    if (!isPollThread()) {
+        losts.defer(key, keyId);
+        return;
+    }
+
+    auto it = keys.find(key);
+    if (it == keys.end()) return;
+
+    auto& list = it->second;
+    list.erase(Item(keyId));
+
+    if (list.empty())
+        keys.erase(key);
+}
 
 void
 DistributedDiscovery::
@@ -695,7 +716,7 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
         auto toTrigger = watchIt->second;
         for (const auto& watch : toTrigger)
-            watch.watch(watch.handle, payload);
+            watch.watch(watch.handle, keyId, payload);
     }
 
     return last;

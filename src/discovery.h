@@ -33,7 +33,7 @@ namespace slick {
 struct Discovery
 {
     typedef size_t WatchHandle;
-    typedef std::function<void(WatchHandle, const Payload&)> WatchFn;
+    typedef std::function<void(WatchHandle, const UUID&, const Payload&)> WatchFn;
 
     virtual int fd() const = 0;
     virtual void poll(size_t timeoutMs = 0) = 0;
@@ -41,6 +41,7 @@ struct Discovery
 
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch) = 0;
     virtual void forget(const std::string& key, WatchHandle handle) = 0;
+    virtual void lost(const std::string& key, const UUID& keyId) = 0;
 
     virtual void retract(const std::string& key) = 0;
     virtual void publish(const std::string& key, Payload&& data) = 0;
@@ -77,6 +78,7 @@ struct DistributedDiscovery : public Discovery
 
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch);
     virtual void forget(const std::string& key, WatchHandle handle);
+    virtual void lost(const std::string& key, const UUID& keyId);
 
     virtual void publish(const std::string& key, Payload&& data);
     virtual void retract(const std::string& key);
@@ -136,6 +138,9 @@ private:
         double expiration;
 
         Item() : expiration(0) {}
+
+        // Used for searching in SortedVectors.
+        explicit Item(UUID id) : id(std::move(id)) {}
 
         Item(KeyItem&& item, double now = lockless::wall()) :
             id(std::move(std::get<1>(item))),
@@ -253,6 +258,7 @@ private:
     Defer<QueueSize, std::string, Payload> publishes;
     Defer<QueueSize, std::string, Watch> discovers;
     Defer<QueueSize, std::string, WatchHandle> forgets;
+    Defer<QueueSize, std::string, UUID> losts;
 
 
     size_t timerPeriod(size_t secs);

@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(basics)
         cerr << fmtTitle("discover-publish", '-') << endl;
 
         std::atomic<size_t> discovered(0);
-        node0.discover("key0", [&] (Discovery::WatchHandle handle, const Payload& data) {
+        node0.discover("key0", [&] (Discovery::WatchHandle handle, const UUID&, const Payload& data) {
                     discovered = unpack<size_t>(data);
                     printf("node0: key0=%lu\n", discovered.load());
                     node0.forget("key0", handle);
@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(basics)
         node0.publish("key1", pack(size_t(2)));
         lockless::sleep(WaitPeriod);
 
-        node1.discover("key1", [&] (Discovery::WatchHandle handle, const Payload& data) {
+        node1.discover("key1", [&] (Discovery::WatchHandle handle, const UUID&, const Payload& data) {
                     discovered = unpack<size_t>(data);
                     printf("node1: key1=%lu\n", discovered.load());
                     node0.forget("key1", handle);
