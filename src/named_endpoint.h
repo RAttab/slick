@@ -36,10 +36,10 @@ struct NamedEndpoint : public Endpoint
     }
 
     typedef std::function<bool(const Payload& data)> FilterFn;
-    void find(const std::string& key, FilterFn&& filter);
-    void find(const std::string& key, const FilterFn& filter)
+    void connect(const std::string& key, FilterFn&& filter);
+    void connect(const std::string& key, const FilterFn& filter = FilterFn())
     {
-        find(key, FilterFn(filter));
+        connect(key, FilterFn(filter));
     }
 
 
@@ -88,7 +88,7 @@ private:
     std::unordered_map<int, Connection> connections;
 
     enum { QueueSize = 1 << 4 };
-    Defer<QueueSize, std::string, FilterFn> finds;
+    Defer<QueueSize, std::string, FilterFn> connects;
     Defer<QueueSize, std::string, Discovery::WatchHandle, UUID, Payload> watches;
 };
 

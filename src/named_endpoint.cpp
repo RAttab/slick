@@ -24,9 +24,9 @@ NamedEndpoint(Discovery& discovery) :
     Endpoint::onLostConnection = std::bind(&NamedEndpoint::onDisconnect, this, _1);
     poller.add(endpoint.fd());
 
-    typedef void (NamedEndpoint::*FindFn)(const std::string&, FilterFn&&);
-    finds.onOperation = std::bind((FindFn)&NamedEndpoint::find, this,  _1, _2);
-    poller.add(finds.fd());
+    typedef void (NamedEndpoint::*ConnectFn)(const std::string&, FilterFn&&);
+    connects.onOperation = std::bind((ConnectFn)&NamedEndpoint::connect, this,  _1, _2);
+    poller.add(connects.fd());
 
     watches.onOperation = std::bind(&NamedEndpoint::onWatch, this, _1, _2, _3, _4);
     poller.add(watches.fd());
@@ -48,7 +48,7 @@ poll(int timeoutMs)
 
         struct epoll_event ev = poller.next();
 
-        if      (ev.data.fd == finds.fd()) finds.poll();
+        if      (ev.data.fd == connects.fd()) connects.poll();
         else if (ev.data.fd == watches.fd()) watches.poll();
         else endpoint.poll();
     }
@@ -82,10 +82,10 @@ listen(std::string key, Port listenPort, Payload&& data)
 
 void
 NamedEndpoint::
-find(const std::string& key, FilterFn&& filter)
+connect(const std::string& key, FilterFn&& filter)
 {
     if (!isPollThread()) {
-        finds.defer(key, std::move(filter));
+        connects.defer(key, std::move(filter));
         return;
     }
 
@@ -115,7 +115,7 @@ onWatch(const std::string& key,
     const auto& watch = activeWatches[handle];
     if (watch.filter && !watch.filter(filterData)) return;
 
-    int fd = connect(addrs);
+    int fd = Endpoint::connect(addrs);
     assert(fd > 0);
     connections[fd] = Connection(key, keyId);
 }
