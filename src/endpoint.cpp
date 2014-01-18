@@ -162,6 +162,8 @@ void
 Endpoint::
 listen(Port listenPort)
 {
+    assert(!isPollThread.isPolling());
+
     for (int fd : listenSockets.fds()) poller.del(fd);
     listenSockets = PassiveSockets(listenPort);
 }
