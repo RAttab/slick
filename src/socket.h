@@ -50,10 +50,17 @@ typedef uint16_t Port;
 
 struct PortRange
 {
+    Port first, last;
+
     PortRange(Port port) : first(port), last(port + 1) {}
     PortRange(Port first, Port last) : first(first), last(last) {}
 
-    Port first, last;
+    size_t size() const { return last - first; }
+    bool includes(Port port) const
+    {
+        return port >= first && port < last;
+    }
+
 };
 
 
