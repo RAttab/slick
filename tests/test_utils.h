@@ -7,11 +7,44 @@
 
 #pragma once
 
+#include "utils.h"
+#include "socket.h"
+#include "lockless/tm.h"
+
+#include <unordered_set>
 #include <signal.h>
 #include <unistd.h>
 
 namespace slick {
 
+
+/******************************************************************************/
+/* PORT                                                                       */
+/******************************************************************************/
+
+namespace {
+
+Port allocatePort(PortRange range)
+{
+    static std::unordered_set<Port> inUse;
+
+    // Need a little bit of random to avoid weird errors.
+    size_t offset = lockless::rdtsc();
+
+    for (size_t i = 0; i < range.size(); ++i) {
+        Port port = (i + offset) % range.size() + range.first;
+        if (inUse.insert(port).second) return port;
+    }
+
+    return 0;
+}
+
+}
+
+inline Port allocatePort(Port first = 20000, Port last = 30000)
+{
+    return allocatePort({ first, last });
+}
 
 /******************************************************************************/
 /* BOOST                                                                      */

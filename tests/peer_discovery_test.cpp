@@ -9,6 +9,7 @@
 #define BOOST_TEST_DYN_LINK
 
 #include "peer_discovery.h"
+#include "test_utils.h"
 #include "lockless/tm.h"
 #include "lockless/format.h"
 
@@ -45,13 +46,8 @@ BOOST_AUTO_TEST_CASE(basics)
         WaitPeriod = Period * 2000 + 100,
     };
 
-    // Need some random on the ports otherwise you get periodic weird failures
-    // when the test crash and isn't able to properly close the connection. I
-    // believe the kernel lags the ipv4 closing while immediately cleaning up
-    // the ipv6. This means that we're able to bind to the ipv6 but we only ever
-    // try to connect to the ipv4 (luck of the interface sorting).
-    const Port Port0 = 1888 + (lockless::rdtsc() % 100);
-    const Port Port1 = Port0 + 1;
+    const Port Port0 = allocatePort();
+    const Port Port1 = allocatePort();
 
 
     PeerDiscovery node0({}, Port0);
@@ -113,4 +109,3 @@ BOOST_AUTO_TEST_CASE(basics)
     poller0.join();
     poller1.join();
 }
-
