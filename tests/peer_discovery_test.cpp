@@ -1,4 +1,4 @@
-/* discovery_test.cpp                                 -*- C++ -*-
+/* peer_discovery_test.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 04 Jan 2014
    FreeBSD-style copyright and disclaimer apply
 
@@ -8,7 +8,7 @@
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_DYN_LINK
 
-#include "discovery.h"
+#include "peer_discovery.h"
 #include "lockless/tm.h"
 #include "lockless/format.h"
 
@@ -27,7 +27,7 @@ double waitFor(T& value)
     return lockless::wall() - start;
 }
 
-void print(const char* name, const DistributedDiscovery& node)
+void print(const char* name, const PeerDiscovery& node)
 {
     stringstream ss;
     ss << name << ": " << node.id().toString() << " -> [ ";
@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(basics)
     const Port Port1 = Port0 + 1;
 
 
-    DistributedDiscovery node0({}, Port0);
+    PeerDiscovery node0({}, Port0);
     node0.period(Period);
     print("node0", node0);
 
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(basics)
     poller0.run();
 
 
-    DistributedDiscovery node1({ Address("localhost", Port0) }, Port1);
+    PeerDiscovery node1({ Address("localhost", Port0) }, Port1);
     node1.period(Period);
     print("node1", node0);
 
@@ -113,3 +113,4 @@ BOOST_AUTO_TEST_CASE(basics)
     poller0.join();
     poller1.join();
 }
+

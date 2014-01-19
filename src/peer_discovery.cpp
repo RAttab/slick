@@ -1,4 +1,4 @@
-/* discovery.cpp                                 -*- C++ -*-
+/* peer_discovery.cpp                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 26 Dec 2013
    FreeBSD-style copyright and disclaimer apply
 
@@ -6,17 +6,15 @@
 
 */
 
-#include "discovery.h"
-#include "pack.h"
+#include "peer_discovery.h"
 #include "stream.h"
 #include "lockless/bits.h"
 
-#include <set>
-#include <vector>
 #include <algorithm>
 #include <functional>
 #include <sstream>
 #include <iostream>
+#include <atomic>
 
 namespace slick {
 
@@ -26,7 +24,7 @@ namespace slick {
 
 // for the friend crap to work this needs to be outside the anon namespace.
 std::ostream& operator<<(
-        std::ostream& stream, const DistributedDiscovery::Item& item)
+        std::ostream& stream, const PeerDiscovery::Item& item)
 {
     stream << "<";
     streamAll(stream, item.id, item.addrs, item.ttl());
@@ -103,7 +101,7 @@ std::set<T> pickRandom(It first, It last, size_t n, Rng& rng)
 /* CONN STATE                                                                 */
 /******************************************************************************/
 
-DistributedDiscovery::ConnState::
+PeerDiscovery::ConnState::
 ConnState() : fd(0), version(0), isFetch(false)
 {
     static std::atomic<size_t> idCounter{0};
@@ -115,7 +113,7 @@ ConnState() : fd(0), version(0), isFetch(false)
 /* WATCH                                                                      */
 /******************************************************************************/
 
-DistributedDiscovery::Watch::
+PeerDiscovery::Watch::
 Watch(WatchFn watch) : watch(std::move(watch))
 {
     static std::atomic<WatchHandle> handleCounter{0};
@@ -143,11 +141,11 @@ static constexpr Type Data  = 5;
 
 
 /******************************************************************************/
-/* DISTRIBUTED DISCOVERY                                                      */
+/* PEER DISCOVERY                                                             */
 /******************************************************************************/
 
-DistributedDiscovery::
-DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
+PeerDiscovery::
+PeerDiscovery(const std::vector<Address>& seeds, Port port) :
     ttl_(DefaultTTL),
     period_(timerPeriod(DefaultPeriod)),
     connExpThresh_(DefaultExpThresh),
@@ -162,34 +160,34 @@ DistributedDiscovery(const std::vector<Address>& seeds, Port port) :
 
     using namespace std::placeholders;
 
-    endpoint.onPayload = bind(&DistributedDiscovery::onPayload, this, _1, _2);
-    endpoint.onNewConnection = bind(&DistributedDiscovery::onConnect, this, _1);
-    endpoint.onLostConnection = bind(&DistributedDiscovery::onDisconnect, this, _1);
+    endpoint.onPayload = bind(&PeerDiscovery::onPayload, this, _1, _2);
+    endpoint.onNewConnection = bind(&PeerDiscovery::onConnect, this, _1);
+    endpoint.onLostConnection = bind(&PeerDiscovery::onDisconnect, this, _1);
     poller.add(endpoint);
 
-    retracts.onOperation = std::bind(&DistributedDiscovery::retract, this, _1);
+    retracts.onOperation = std::bind(&PeerDiscovery::retract, this, _1);
     poller.add(retracts);
 
-    publishes.onOperation = std::bind(&DistributedDiscovery::publish, this, _1, _2);
+    publishes.onOperation = std::bind(&PeerDiscovery::publish, this, _1, _2);
     poller.add(publishes);
 
-    typedef void (DistributedDiscovery::*DiscoverFn) (const std::string&, Watch&&);
-    DiscoverFn discoverFn = &DistributedDiscovery::discover;
+    typedef void (PeerDiscovery::*DiscoverFn) (const std::string&, Watch&&);
+    DiscoverFn discoverFn = &PeerDiscovery::discover;
     discovers.onOperation = std::bind(discoverFn, this, _1, _2);
     poller.add(discovers);
 
-    forgets.onOperation = std::bind(&DistributedDiscovery::forget, this, _1, _2);
+    forgets.onOperation = std::bind(&PeerDiscovery::forget, this, _1, _2);
     poller.add(forgets);
 
-    losts.onOperation = std::bind(&DistributedDiscovery::lost, this, _1, _2);
+    losts.onOperation = std::bind(&PeerDiscovery::lost, this, _1, _2);
     poller.add(losts);
 
-    timer.onTimer = bind(&DistributedDiscovery::onTimer, this, _1);
+    timer.onTimer = bind(&PeerDiscovery::onTimer, this, _1);
     poller.add(timer);
 }
 
 size_t
-DistributedDiscovery::
+PeerDiscovery::
 timerPeriod(size_t base)
 {
     size_t min = std::max<size_t>(1, base / 2);
@@ -198,14 +196,14 @@ timerPeriod(size_t base)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 period(size_t sec)
 {
     timer.setDelay(period_ = timerPeriod(sec));
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 poll(size_t timeoutMs)
 {
     isPollThread.set();
@@ -213,7 +211,7 @@ poll(size_t timeoutMs)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 shutdown()
 {
     isPollThread.unset();
@@ -225,7 +223,7 @@ shutdown()
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 onPayload(int fd, const Payload& data)
 {
     auto connIt = connections.find(fd);
@@ -254,7 +252,7 @@ onPayload(int fd, const Payload& data)
 
 
 Discovery::WatchHandle
-DistributedDiscovery::
+PeerDiscovery::
 discover(const std::string& key, const WatchFn& fn)
 {
     Watch watch(fn);
@@ -264,7 +262,7 @@ discover(const std::string& key, const WatchFn& fn)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 discover(const std::string& key, Watch&& watch)
 {
     if (!isPollThread()) {
@@ -290,7 +288,7 @@ discover(const std::string& key, Watch&& watch)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 forget(const std::string& key, WatchHandle handle)
 {
     if (!isPollThread()) {
@@ -311,7 +309,7 @@ forget(const std::string& key, WatchHandle handle)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 lost(const std::string& key, const UUID& keyId)
 {
     if (!isPollThread()) {
@@ -330,7 +328,7 @@ lost(const std::string& key, const UUID& keyId)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 publish(const std::string& key, Payload&& data)
 {
     assert(data);
@@ -354,7 +352,7 @@ publish(const std::string& key, Payload&& data)
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 retract(const std::string& key)
 {
     if (!isPollThread()) {
@@ -367,7 +365,7 @@ retract(const std::string& key)
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 onConnect(int fd)
 {
     auto& conn = connections[fd];
@@ -394,7 +392,7 @@ onConnect(int fd)
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 onDisconnect(int fd)
 {
     auto it = connections.find(fd);
@@ -410,7 +408,7 @@ onDisconnect(int fd)
 
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::string init;
@@ -454,7 +452,7 @@ onInit(ConnState& conn, ConstPackIt it, ConstPackIt last)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 sendInitQueries(int fd)
 {
     if (watches.empty()) return;
@@ -472,7 +470,7 @@ sendInitQueries(int fd)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 sendInitKeys(int fd)
 {
     if (data.empty()) return;
@@ -489,7 +487,7 @@ sendInitKeys(int fd)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 sendInitNodes(int fd)
 {
     assert(connections.count(fd));
@@ -514,7 +512,7 @@ sendInitNodes(int fd)
 
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<KeyItem> items;
@@ -561,7 +559,7 @@ onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     NodeLocation node;
@@ -595,7 +593,7 @@ onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<NodeItem> items;
@@ -632,7 +630,7 @@ onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 {
     auto& list = fetches[key];
@@ -651,7 +649,7 @@ sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
 }
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     std::vector<FetchItem> items;
@@ -686,7 +684,7 @@ onFetch(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 
 ConstPackIt
-DistributedDiscovery::
+PeerDiscovery::
 onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
     // Make sure we disconnect when we're done.
@@ -724,7 +722,7 @@ onData(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 onTimer(size_t)
 {
     double now = lockless::wall();
@@ -739,7 +737,7 @@ onTimer(size_t)
 }
 
 std::pair<bool, UUID>
-DistributedDiscovery::
+PeerDiscovery::
 expireItem(SortedVector<Item>& list, double now)
 {
     assert(!list.empty());
@@ -755,7 +753,7 @@ expireItem(SortedVector<Item>& list, double now)
 
 
 bool
-DistributedDiscovery::
+PeerDiscovery::
 expireKeys(double now)
 {
     assert(!keys.empty());
@@ -772,7 +770,7 @@ expireKeys(double now)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 expireFetches(double now)
 {
     while (!fetchExpiration.empty()) {
@@ -793,7 +791,7 @@ expireFetches(double now)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 randomDisconnect(double now)
 {
     if (connections.empty()) return;
@@ -833,7 +831,7 @@ randomDisconnect(double now)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 randomConnect(double now)
 {
     size_t targetSize = lockless::log2(nodes.size());
@@ -863,7 +861,7 @@ randomConnect(double now)
 }
 
 void
-DistributedDiscovery::
+PeerDiscovery::
 seedConnect(double)
 {
     // \todo Should periodicatlly try to reconnect to this to heal partitions.

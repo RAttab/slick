@@ -92,6 +92,7 @@ install(
     src/queue.h
     src/endpoint.h
     src/discovery.h
+    src/peer_discovery.h
     src/named_endpoint.h
 
     DESTINATION
@@ -107,7 +108,7 @@ add_library(
     src/payload.cpp
     src/socket.cpp
     src/endpoint.cpp
-    src/discovery.cpp
+    src/peer_discovery.cpp
     src/named_endpoint.cpp)
 
 install(TARGETS slick DESTINATION lib)
@@ -127,7 +128,7 @@ endfunction()
 
 slick_test(pack)
 slick_test(endpoint)
-slick_test(discovery)
+slick_test(peer_discovery)
 
 add_executable(packet_test tests/packet_test.cpp)
 target_link_libraries(packet_test slick)
