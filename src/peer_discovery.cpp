@@ -7,16 +7,16 @@
 */
 
 #include "peer_discovery.h"
+#include "discovery_utils.h"
 #include "stream.h"
 #include "lockless/bits.h"
 
 #include <algorithm>
 #include <functional>
-#include <sstream>
-#include <iostream>
 #include <atomic>
 
 namespace slick {
+
 
 /******************************************************************************/
 /* DEBUG                                                                      */
@@ -31,40 +31,6 @@ std::ostream& operator<<(
     stream << ">";
     return stream;
 }
-
-namespace {
-
-std::ostream& operator<<(std::ostream& stream, const Payload& data)
-{
-    stream << "<pl:" << data.size() << ">";
-    return stream;
-}
-
-std::ostream& operator<<(std::ostream& stream, const UUID& uuid)
-{
-    // stream << uuid.toString();
-    stream << lockless::format("%08x", uuid.time_low);
-    return stream;
-}
-
-std::ostream& operator<<(std::ostream& stream, const Address& addr)
-{
-    stream << addr.toString();
-    return stream;
-}
-
-
-template<typename... Args>
-void print(UUID& id, const char* action, const Args&... args)
-{
-    std::stringstream ss;
-    ss << id << ": " << action << "(";
-    streamAll(ss, args...);
-    ss << ")\n";
-    std::cerr << ss.str();
-}
-
-} // namespace anonymous
 
 
 /******************************************************************************/
@@ -127,7 +93,7 @@ Watch(WatchFn watch) : watch(std::move(watch))
 
 namespace Msg {
 
-static const char* Init =  "_slick_disc_";
+static const char* Init =  "_slick_peer_disc_";
 static constexpr uint32_t Version = 1;
 
 typedef uint16_t Type;
@@ -172,8 +138,7 @@ PeerDiscovery(const std::vector<Address>& seeds, Port port) :
     poller.add(publishes);
 
     typedef void (PeerDiscovery::*DiscoverFn) (const std::string&, Watch&&);
-    DiscoverFn discoverFn = &PeerDiscovery::discover;
-    discovers.onOperation = std::bind(discoverFn, this, _1, _2);
+    discovers.onOperation = std::bind((DiscoverFn) &PeerDiscovery::discover, this, _1, _2);
     poller.add(discovers);
 
     forgets.onOperation = std::bind(&PeerDiscovery::forget, this, _1, _2);
@@ -266,7 +231,7 @@ PeerDiscovery::
 discover(const std::string& key, Watch&& watch)
 {
     if (!isPollThread()) {
-        discovers.defer(key, watch);
+        discovers.defer(key, std::move(watch));
         return;
     }
 
