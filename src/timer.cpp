@@ -64,9 +64,10 @@ setDelay(double delay, double init)
     auto ts = [] (double value) {
         struct timespec ts;
         ts.tv_sec = uint64_t(value);
-        ts.tv_nsec = value - ts.tv_sec;
+        ts.tv_nsec = (value - ts.tv_sec) * 1000000000;
         return ts;
     };
+
 
     struct itimerspec spec = { ts(delay), ts(init) };
     int res = timerfd_settime(fd_, 0, &spec, nullptr);
