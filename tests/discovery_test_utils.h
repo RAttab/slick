@@ -27,9 +27,9 @@ namespace slick {
 struct NodePool
 {
     enum {
-        Period = 1,
-        TTL = 10,
-        ConnExp = 5
+        Period  = 500,
+        TTL     = 1000 * 2,
+        ConnExp = 1000 * 2
     };
 
     typedef std::vector<Address> Node;

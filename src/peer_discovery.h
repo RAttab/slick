@@ -33,10 +33,10 @@ struct PeerDiscovery : public Discovery
     enum {
         DefaultPort = 18888,
 
-        DefaultPeriod = 60 * 1,
-        DefaultTTL    = 60 * 60 * 8,
+        DefaultPeriod = 1000 * 60 * 1,
+        DefaultTTL    = 1000 * 60 * 60 * 8,
 
-        DefaultExpThresh = 10,
+        DefaultExpThresh = 1000 * 10,
     };
     typedef std::vector<Address> NodeLocation;
 
@@ -56,9 +56,9 @@ struct PeerDiscovery : public Discovery
     virtual void retract(const std::string& key);
 
     void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
-    void connExpThresh(size_t sec = DefaultExpThresh) {connExpThresh_ = sec; }
+    void connExpThresh(size_t ms = DefaultExpThresh) {connExpThresh_ = ms; }
 
-    void period(size_t sec = DefaultPeriod);
+    void period(size_t ms = DefaultPeriod);
 
     const UUID& id() const { return myId; }
     const NodeLocation& node() const { return myNode; }
@@ -117,29 +117,29 @@ private:
         Item(KeyItem&& item, double now = lockless::wall()) :
             id(std::move(std::get<1>(item))),
             addrs(std::move(std::get<2>(item))),
-            expiration(now + std::get<3>(item))
+            expiration(now * 1000 + std::get<3>(item))
         {}
 
         Item(NodeItem&& item, double now = lockless::wall()) :
             id(std::move(std::get<0>(item))),
             addrs(std::move(std::get<1>(item))),
-            expiration(now + std::get<2>(item))
+            expiration(now * 1000 + std::get<2>(item))
         {}
 
         Item(UUID id, NodeLocation addrs, size_t ttl, double now = lockless::wall()) :
-            id(std::move(id)), addrs(std::move(addrs)), expiration(now + ttl)
+            id(std::move(id)), addrs(std::move(addrs)), expiration(now * 1000 + ttl)
         {}
 
         size_t ttl(double now = lockless::wall()) const
         {
-            if (expiration <= now) return 0;
-            return expiration - now;
+            if (expiration <= now * 1000) return 0;
+            return expiration - now * 1000;
         }
 
         void setTTL(size_t ttl, double now = lockless::wall())
         {
             if (ttl > this->ttl(now))
-            expiration = now + ttl;
+            expiration = now * 1000 + ttl;
         }
 
         bool operator<(const Item& other) const { return id < other.id; }
@@ -190,13 +190,15 @@ private:
         double expiration;
 
         FetchExp(std::string key, UUID keyId, size_t delay, double now = lockless::wall()) :
-            key(std::move(key)), keyId(std::move(keyId)), expiration(now + delay)
+            key(std::move(key)),
+            keyId(std::move(keyId)),
+            expiration(now * 1000 + delay)
         {}
     };
 
 
     size_t ttl_;
-    size_t period_;
+    double period_;
     size_t connExpThresh_;
 
     UUID myId;
@@ -233,7 +235,7 @@ private:
     Defer<QueueSize, std::string, UUID> losts;
 
 
-    size_t timerPeriod(size_t secs);
+    double timerPeriod(size_t ms);
     void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);
     void onPayload(int fd, const Payload& data);

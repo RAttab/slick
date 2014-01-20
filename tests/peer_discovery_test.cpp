@@ -43,8 +43,8 @@ BOOST_AUTO_TEST_CASE(basics)
     cerr << fmtTitle("basics", '=') << endl;
 
     enum {
-        Period = 1,
-        WaitPeriod = Period * 2000 + 100,
+        Period = 500,
+        WaitPeriod = Period * 2 + 100,
     };
 
     const Port Port0 = allocatePort();
@@ -111,6 +111,7 @@ BOOST_AUTO_TEST_CASE(basics)
     poller1.join();
 }
 
+
 enum SeedPos { None, Front, Back };
 
 std::unique_ptr<PeerDiscovery>
@@ -146,9 +147,11 @@ BOOST_AUTO_TEST_CASE(linearPoolTest)
 
     node0->publish("blah", pack(size_t(1)));
     node1->discover("blah", [&](Discovery::WatchHandle, UUID, const Payload&) {
-                printf("\n@@@ GOT IT @@@\n");
                 done = true;
             });
+
+
+    double start = lockless::wall();
 
     pool.run();
     poller.run();
@@ -156,10 +159,14 @@ BOOST_AUTO_TEST_CASE(linearPoolTest)
     for (size_t i = 0; !done && i < 10000; ++i)
         lockless::sleep(1);
 
+    double elapsed = lockless::wall() - start;
+
     BOOST_CHECK(done);
 
     poller.join();
     node0->shutdown();
     node1->shutdown();
     pool.shutdown();
+
+    printf("discovery in %s\n\n", fmtElapsed(elapsed).c_str());
 }

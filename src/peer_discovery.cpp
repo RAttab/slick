@@ -151,20 +151,21 @@ PeerDiscovery(const std::vector<Address>& seeds, Port port) :
     poller.add(timer);
 }
 
-size_t
+double
 PeerDiscovery::
 timerPeriod(size_t base)
 {
     size_t min = std::max<size_t>(1, base / 2);
     size_t max = min + base;
-    return std::uniform_int_distribution<size_t>(min, max)(rng);
+    size_t ms = std::uniform_int_distribution<size_t>(min, max)(rng);
+    return double(ms) / 1000;
 }
 
 void
 PeerDiscovery::
-period(size_t sec)
+period(size_t ms)
 {
-    timer.setDelay(period_ = timerPeriod(sec));
+    timer.setDelay(period_ = timerPeriod(ms));
 }
 
 void
@@ -335,7 +336,7 @@ onConnect(int fd)
 {
     auto& conn = connections[fd];
     conn.fd = fd;
-    connExpiration.emplace_back(fd, conn.id, lockless::wall());
+    connExpiration.emplace_back(fd, conn.id, lockless::wall() * 1000);
     print(myId, "ocon", fd, conn.id, conn.isFetch, conn.nodeId);
 
     auto head = std::make_tuple(Msg::Init, Msg::Version, myId);
@@ -507,7 +508,7 @@ onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
             // want keys message to be spammed constantly in the network. So we
             // only forward keys when the ttl reaches its half-life.
             if (myTTL >= ttl_ / 2) continue;
-            if (myTTL / 2 >= msgTTL) continue;
+            if (myTTL / 2 > msgTTL) continue;
         }
         else {
             if (watches.count(key))
@@ -747,7 +748,7 @@ PeerDiscovery::
 expireFetches(double now)
 {
     while (!fetchExpiration.empty()) {
-        if (fetchExpiration.front().expiration >= now) return;
+        if (fetchExpiration.front().expiration >= now * 1000) return;
 
         FetchExp item = fetchExpiration.front();
         fetchExpiration.pop_front();
@@ -783,7 +784,7 @@ randomDisconnect(double now)
 
     while(disconnects) {
         const auto& item = connExpiration.front();
-        if (item.time + connExpThresh_ >= now) break;
+        if (item.time + connExpThresh_ >= now * 1000) break;
 
         size_t id = item.id;
         int fd = item.fd;
