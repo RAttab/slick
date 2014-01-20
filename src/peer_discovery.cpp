@@ -499,11 +499,15 @@ onKeys(ConnState& conn, ConstPackIt it, ConstPackIt last)
         auto it = list.find(value);
 
         if (it != list.end()) {
+            size_t myTTL = it->ttl(now);
+            size_t msgTTL = value.ttl(now);
+            it->setTTL(msgTTL, now);
+
             // We don't want to let keys expire (duplicate watches) but we don't
             // want keys message to be spammed constantly in the network. So we
             // only forward keys when the ttl reaches its half-life.
-            if (it->ttl(now) >= ttl_ / 2) continue;
-            it->setTTL(value.ttl(now), now);
+            if (myTTL >= ttl_ / 2) continue;
+            if (myTTL / 2 >= msgTTL) continue;
         }
         else {
             if (watches.count(key))
@@ -577,8 +581,12 @@ onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
         auto it = nodes.find(value);
         if (it != nodes.end()) {
-            if (it->ttl(now) >= ttl_ / 2) continue;
+            size_t myTTL = it->ttl(now);
+            size_t msgTTL = value.ttl(now);
             it->setTTL(value.ttl(now), now);
+
+            if (myTTL >= ttl_ / 2) continue;
+            if (myTTL / 2 > msgTTL) continue;
         }
         else nodes.insert(value);
 

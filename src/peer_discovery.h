@@ -42,6 +42,7 @@ struct PeerDiscovery : public Discovery
 
     PeerDiscovery(
             const std::vector<Address>& seeds, Port port = DefaultPort);
+    virtual ~PeerDiscovery() { shutdown(); }
 
     virtual int fd() const { return poller.fd(); }
     virtual void poll(size_t timeoutMs = 0);
