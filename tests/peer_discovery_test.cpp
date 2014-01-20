@@ -9,6 +9,7 @@
 #define BOOST_TEST_DYN_LINK
 
 #include "peer_discovery.h"
+#include "discovery_test_utils.h"
 #include "test_utils.h"
 #include "lockless/tm.h"
 #include "lockless/format.h"
@@ -109,3 +110,60 @@ BOOST_AUTO_TEST_CASE(basics)
     poller0.join();
     poller1.join();
 }
+
+enum SeedPos { None, Front, Back };
+
+std::unique_ptr<PeerDiscovery>
+makeNode(PollThread& poller, const NodePool& pool, SeedPos seedPos)
+{
+    std::vector<Address> seed;
+    const auto& nodes = pool.nodes();
+
+    if (seedPos == Front) seed = { nodes.front()->node().front() };
+    else if (seedPos == Back) seed = { nodes.back()->node().front() };
+
+    std::unique_ptr<PeerDiscovery> node(new PeerDiscovery(seed, allocatePort()));
+    node->period(NodePool::Period);
+    node->ttl(NodePool::TTL);
+    node->connExpThresh(NodePool::ConnExp);
+    poller.add(*node);
+
+    return std::move(node);
+
+}
+
+#if 0 // WIP test
+
+BOOST_AUTO_TEST_CASE(linearPoolTest)
+{
+    cerr << endl << fmtTitle("linear-pool", '=') << endl;
+
+    NodePool pool(NodePool::Linear, 10);
+    PollThread poller;
+
+    auto node0 = makeNode(poller, pool, Front);
+    auto node1 = makeNode(poller, pool, Back);
+
+    std::atomic<bool> done(false);
+
+    node0->publish("blah", pack(size_t(1)));
+    node1->discover("blah", [&](Discovery::WatchHandle, UUID, const Payload&) {
+                printf("\n@@@ GOT IT @@@\n");
+                done = true;
+            });
+
+    pool.run();
+    poller.run();
+
+    for (size_t i = 0; !done && i < 10000; ++i)
+        lockless::sleep(1);
+
+    BOOST_CHECK(done);
+
+    poller.join();
+    node0->shutdown();
+    node1->shutdown();
+    pool.shutdown();
+}
+
+#endif

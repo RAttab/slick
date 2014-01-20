@@ -11,6 +11,7 @@
 #include "socket.h"
 #include "poll.h"
 #include "test_utils.h"
+#include "lockless/bits.h"
 
 #include <atomic>
 #include <thread>
@@ -26,7 +27,7 @@ namespace slick {
 struct NodePool
 {
     enum {
-        Period = 1,
+        Period = 2,
         TTL = 4,
         ConnExp = 2
     };
@@ -35,11 +36,11 @@ struct NodePool
 
     enum Layout { Linear, Central, Random };
 
-    NodePool(Layout layout, size_t n, std::vector<Node> seeds = {}) :
+    NodePool(Layout layout, size_t n, std::vector<Address> seeds = {}) :
         pollState(Pause)
     {
         for (size_t i = 0; i < n; ++i) {
-            nodes.emplace_back(makeNode(seed));
+            nodes_.emplace_back(makeNode(seeds));
             seeds = getSeeds(layout, n);
         }
 
@@ -48,32 +49,32 @@ struct NodePool
 
     ~NodePool()
     {
-        for (auto node : nodes) delete node;
+        for (auto node : nodes_) delete node;
     }
 
     void run() { pollState = Run; }
     void pause() { pollState = Pause; }
     void shutdown()
     {
-        pollState = Shutdown;
+        pollState = Stop;
         pollThread.join();
 
-        for (auto node : nodes) node->shutdown();
+        for (auto node : nodes_) node->shutdown();
     }
 
-    const std::vector<PeerDiscovery*> nodes() const { return nodes; }
+    const std::vector<PeerDiscovery*> nodes() const { return nodes_; }
 
 private:
 
     void poll()
     {
-        while (pollState != Shutdown) {
+        while (pollState != Stop) {
             while (pollState == Pause) lockless::sleep(1);
             poller.poll(1);
         }
     }
 
-    PeerDiscovery* makeNode(const std::vector<Node>& seeds)
+    PeerDiscovery* makeNode(const std::vector<Address>& seeds)
     {
         Port port = allocatePort(40000, 50000);
 
@@ -82,37 +83,37 @@ private:
         node->ttl(TTL);
         node->connExpThresh(ConnExp);
 
-        poller.add(node->fd());
+        poller.add(*node);
 
-        return std::move(node);
+        return node.release();
     }
 
-    std::vector<Node> getSeeds(Layout layout, size_t n)
+    std::vector<Address> getSeeds(Layout layout, size_t n)
     {
         if (layout == Linear)
-            return {{ nodes.back().node() }};
+            return { nodes_.back()->node().front() };
 
-        if (layout == Central && seeds.empty())
-            return {{ nodes.front().node() }};
+        if (layout == Central)
+            return { nodes_.front()->node().front() };
 
         size_t picks = lockless::log2(n);
-        if (nodes.size() <= picks)
-            return {{ nodes.front().node() }};
+        if (nodes_.size() <= picks)
+            return { nodes_.front()->node().front() };
 
         std::unordered_set<size_t> indexes;
-        std::uniform_int_distribution<size_t> dist(0, nodes.size() -1);
+        std::uniform_int_distribution<size_t> dist(0, nodes_.size() -1);
         while (indexes.size() < picks)
             indexes.insert(dist(rng));
 
-        std::vector<Node> seeds;
+        std::vector<Address> seeds;
         for (size_t i : indexes)
-            seeds.emplace_back(nodes[i].node());
+            seeds.emplace_back(nodes_[i]->node().front());
 
         return seeds;
     }
 
 
-    std::vector<PeerDiscovery*> nodes;
+    std::vector<PeerDiscovery*> nodes_;
 
     enum PollState { Run, Pause, Stop };
     std::atomic<PollState> pollState;
