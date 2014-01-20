@@ -132,8 +132,6 @@ makeNode(PollThread& poller, const NodePool& pool, SeedPos seedPos)
 
 }
 
-#if 0 // WIP test
-
 BOOST_AUTO_TEST_CASE(linearPoolTest)
 {
     cerr << endl << fmtTitle("linear-pool", '=') << endl;
@@ -165,5 +163,3 @@ BOOST_AUTO_TEST_CASE(linearPoolTest)
     node1->shutdown();
     pool.shutdown();
 }
-
-#endif
