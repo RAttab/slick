@@ -80,6 +80,7 @@ struct Address
 };
 
 
+// \todo Should pack the host as binary instead of a string.
 template<>
 struct Pack<Address>
 {

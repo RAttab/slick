@@ -3,6 +3,8 @@
    FreeBSD-style copyright and disclaimer apply
 
    Implementation of the provider endpoint
+
+   \todo Need to also trap the onError to clean up failed connections.
 */
 
 #include "named_endpoint.h"
