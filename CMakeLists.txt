@@ -88,6 +88,7 @@ install(
     src/notify.h
     src/timer.h
     src/payload.h
+    src/address.h
     src/socket.h
     src/queue.h
     src/endpoint.h
@@ -106,6 +107,7 @@ add_library(
     src/notify.cpp
     src/timer.cpp
     src/payload.cpp
+    src/address.cpp
     src/socket.cpp
     src/endpoint.cpp
     src/peer_discovery.cpp

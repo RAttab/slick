@@ -9,7 +9,7 @@
 
 #include "payload.h"
 #include "uuid.h"
-#include "socket.h"
+#include "address.h"
 #include "stream.h"
 
 #include <sstream>
