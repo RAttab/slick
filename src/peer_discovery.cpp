@@ -34,36 +34,6 @@ std::ostream& operator<<(
 
 
 /******************************************************************************/
-/* UTILS                                                                      */
-/******************************************************************************/
-
-template<typename It, typename Rng>
-It pickRandom(It it, It last, Rng& rng)
-{
-    if (it == last) return last;
-
-    size_t dist = std::distance(it, last);
-    size_t n = std::uniform_int_distribution<size_t>(0, dist - 1)(rng);
-    std::advance(it, n);
-    return it;
-}
-
-template<typename T, typename It, typename Rng>
-std::set<T> pickRandom(It first, It last, size_t n, Rng& rng)
-{
-    if (first == last) return {};
-
-    std::set<T> result;
-    while (result.size() < n) {
-        auto it = pickRandom(first, last, rng);
-        if (it == last) break;
-        result.insert(*it);
-    }
-    return std::move(result);
-}
-
-
-/******************************************************************************/
 /* CONN STATE                                                                 */
 /******************************************************************************/
 
