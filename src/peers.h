@@ -25,13 +25,12 @@ struct Endpoint;
 
 struct NoData {};
 typedef size_t PeerId;
+enum class PeerModel { Persistent, Rotate };
 
 template<typename ConnectionData = NoData>
 struct Peers
 {
-    enum Model { Persistent, Rotate };
-
-    Peers(Model model, Endpoint& endpoint, double period);
+    Peers(PeerModel model, Endpoint& endpoint, double period);
     ~Peers();
 
     void period(double value);

@@ -21,7 +21,7 @@ namespace slick {
 
 template<typename Data>
 Peers<Data>::
-Peers(Model model, Endpoint& endpoint, double period) :
+Peers(PeerModel model, Endpoint& endpoint, double period) :
     model(model),
     endpoint(endpoint),
     period_(calcPeriod(period)),
