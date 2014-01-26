@@ -109,6 +109,9 @@ struct Pack<Address>
 
 typedef std::vector<Address> NodeAddress;
 
+NodeAddress addrToNode(Address addr);
+std::vector<NodeAddress> addrToNode(std::vector<Address> addrs);
+
 
 /******************************************************************************/
 /* NETWORK INTERFACES                                                         */

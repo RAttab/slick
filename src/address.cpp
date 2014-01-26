@@ -66,6 +66,28 @@ Address(struct sockaddr* addr, socklen_t addrlen)
 }
 
 
+/******************************************************************************/
+/* NODE ADDRESS                                                               */
+/******************************************************************************/
+
+NodeAddress
+addrToNode(Address addr)
+{
+    return { std::move(addr) };
+}
+
+std::vector<NodeAddress>
+addrToNode(std::vector<Address> addrs)
+{
+    NodeAddress result;
+    result.reserve(addrs.size());
+
+    for (auto& addr : addrs)
+        result.emplace_back(addrToNode(std::move(addr)));
+
+    return result;
+}
+
 
 /******************************************************************************/
 /* NETWORK INTERFACES                                                         */
