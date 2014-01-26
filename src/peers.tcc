@@ -1,8 +1,8 @@
-/* connections.tcc                                 -*- C++ -*-
+/* peers.tcc                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 25 Jan 2014
    FreeBSD-style copyright and disclaimer apply
 
-   Implementation of the connections class.
+   Implementation of the peers class.
 */
 
 #include "connections.h"
@@ -20,8 +20,8 @@ namespace slick {
 
 
 template<typename Data>
-Connections<Data>::
-Connections(Model model, Endpoint& endpoint, double period) :
+Peers<Data>::
+Peers(Model model, Endpoint& endpoint, double period) :
     model(model),
     endpoint(endpoint),
     period_(calcPeriod(period)),
@@ -29,25 +29,25 @@ Connections(Model model, Endpoint& endpoint, double period) :
     rng(lockless::rdtsc())
 {
     using namespace std::placeholders;
-    timer.onTimer = std::bind(&Connections<Data>::onTimer, this, _1);
+    timer.onTimer = std::bind(&Peers<Data>::onTimer, this, _1);
 }
 
 template<typename Data>
-Connections<Data>::
-~Connections()
+Peers<Data>::
+~Peers()
 {
 }
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 shutdown()
 {
 }
 
 template<typename Data>
 double
-Connections<Data>::
+Peers<Data>::
 calcPeriod(double value)
 {
     size_t min = std::max<size_t>(1, base / 2);
@@ -58,7 +58,7 @@ calcPeriod(double value)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 period(double value)
 {
     timer.setDelay(period_ = calcPeriod(value));
@@ -66,7 +66,7 @@ period(double value)
 
 template<typename Data>
 size_t
-Connections<Data>::
+Peers<Data>::
 peers() const
 {
     return peers.size();
@@ -74,7 +74,7 @@ peers() const
 
 template<typename Data>
 size_t
-Connections<Data>::
+Peers<Data>::
 connections() const
 {
     return connections.size();
@@ -82,7 +82,7 @@ connections() const
 
 template<typename Data>
 Peer&
-Connections<Data>::
+Peers<Data>::
 peer(PeerId id)
 {
     auto it = peers.find(id);
@@ -92,7 +92,7 @@ peer(PeerId id)
 
 template<typename Data>
 const Peer&
-Connections<Data>::
+Peers<Data>::
 peer(PeerId id) const
 {
     auto it = peers.find(id);
@@ -102,7 +102,7 @@ peer(PeerId id) const
 
 template<typename Data>
 Connection&
-Connections<Data>::
+Peers<Data>::
 connection(PeerId id)
 {
     Peer& peer = peer(id);
@@ -116,7 +116,7 @@ connection(PeerId id)
 
 template<typename Data>
 const Connection&
-Connections<Data>::
+Peers<Data>::
 connection(PeerId id) const
 {
     Peer& peer = peer(id);
@@ -129,7 +129,7 @@ connection(PeerId id) const
 
 template<typename Data>
 bool
-Connections<Data>::
+Peers<Data>::
 connected(PeerId id) const
 {
     return peer(id).connected();
@@ -137,7 +137,7 @@ connected(PeerId id) const
 
 template<typename Data>
 Data&
-Connections<Data>::
+Peers<Data>::
 data(PeerId id)
 {
     return connection(id).data;
@@ -146,7 +146,7 @@ data(PeerId id)
 
 template<typename Data>
 const Data&
-Connections<Data>::
+Peers<Data>::
 data(PeerId id) const
 {
     return connection(id).data;
@@ -155,7 +155,7 @@ data(PeerId id) const
 
 template<typename Data>
 const NodeAddress&
-Connections<Data>::
+Peers<Data>::
 addr(PeerId id) const
 {
     return peer(id).addr;
@@ -165,7 +165,7 @@ addr(PeerId id) const
 template<typename Data>
 template<typename Payload>
 void
-Connections<Data>::
+Peers<Data>::
 send(PeerId id, Payload&& data)
 {
     endpoint.send(connection(id).fd, std::forward<Payload>(data));
@@ -174,7 +174,7 @@ send(PeerId id, Payload&& data)
 template<typename Data>
 template<typename Payload>
 void
-Connections<Data>::
+Peers<Data>::
 broadcast(Payload&& data);
 {
     endpoint.multicast(broadcastFds, std::forward<Payload>(data));
@@ -184,7 +184,7 @@ broadcast(Payload&& data);
 
 template<typename Data>
 bool
-Connections<Data>::
+Peers<Data>::
 test(int fd) const
 {
     return connections.count(fd);
@@ -192,7 +192,7 @@ test(int fd) const
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 poll(size_t timeoutMs)
 {
     timer.poll(timeoutMs);
@@ -201,7 +201,7 @@ poll(size_t timeoutMs)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 connectPeer(const Peer& peer)
 {
     assert(!peer.connected());
@@ -214,7 +214,7 @@ connectPeer(const Peer& peer)
 
 template<typename Data>
 size_t
-Connections<Data>::
+Peers<Data>::
 add(NodeAddress addr)
 {
     PeerId id = ++idCounter;
@@ -228,7 +228,7 @@ add(NodeAddress addr)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 remove(PeerId id)
 {
     Peer& peer = peer(id);
@@ -243,7 +243,7 @@ remove(PeerId id)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 notifyConnect(int fd)
 {
     Connection& conn = connections[fd];
@@ -267,7 +267,7 @@ notifyConnect(int fd)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 notifyDisconnect(int fd)
 {
     auto it connIt = connections.find(fd);
@@ -291,7 +291,7 @@ notifyDisconnect(int fd)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 onTimer(uint64_t)
 {
     double now = lockless::wall();
@@ -309,7 +309,7 @@ onTimer(uint64_t)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 reconnect(const Deadline& deadline)
 {
     auto peerIt = peers.find(deadline.id);
@@ -319,7 +319,7 @@ reconnect(const Deadline& deadline)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 disconnect(const Deadline& deadline)
 {
     auto peerIt = peers.find(deadline.id);
@@ -331,7 +331,7 @@ disconnect(const Deadline& deadline)
 
 template<typename Data>
 void
-Connections<Data>::
+Peers<Data>::
 topupConnections(double now)
 {
     size_t targetSize = lockless::log2(peers.size());

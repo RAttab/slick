@@ -1,8 +1,8 @@
-/* connections.h                                 -*- C++ -*-
+/* peers.h                                 -*- C++ -*-
    Rémi Attab (remi.attab@gmail.com), 19 Jan 2014
    FreeBSD-style copyright and disclaimer apply
 
-   Connection manager utilities.
+   Peer management utility.
 */
 
 #pragma once
@@ -24,16 +24,15 @@ struct Endpoint;
 /******************************************************************************/
 
 struct NoData {};
-
 typedef size_t PeerId;
 
-template<typename Data = NodData>
-struct Connections
+template<typename ConnectionData = NoData>
+struct Peers
 {
     enum Model { Persistent, Rotate };
 
-    Connections(Model model, Endpoint& endpoint, double period);
-    ~Connections();
+    Peers(Model model, Endpoint& endpoint, double period);
+    ~Peers();
 
     void period(double value);
 
@@ -54,8 +53,8 @@ struct Connections
 
     bool connected(PeerId id) const;
     const NodeAddress& addr(size_t PeerId) const;
-    Data& data(PeerId id);
-    const Data& data(PeerId id) const;
+    ConnectionData& data(PeerId id);
+    const ConnectionData& data(PeerId id) const;
 
 
     template<typename Payload>
@@ -87,7 +86,7 @@ private:
     {
         int fd;
         PeerId id;
-        Data data;
+        ConnectionData data;
 
         Connection(int fd = -1, PeerId id = 0) :
             fd(fd), id(id)
