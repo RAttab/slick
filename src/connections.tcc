@@ -83,9 +83,9 @@ connections() const
 template<typename Data>
 Peer&
 Connections<Data>::
-peer(size_t peerId)
+peer(PeerId id)
 {
-    auto it = peers.find(peerId);
+    auto it = peers.find(id);
     assert(it != peers.end());
     return *it;
 }
@@ -93,9 +93,9 @@ peer(size_t peerId)
 template<typename Data>
 const Peer&
 Connections<Data>::
-peer(size_t peerId) const
+peer(PeerId id) const
 {
-    auto it = peers.find(peerId);
+    auto it = peers.find(id);
     assert(it != peers.end());
     return *it;
 }
@@ -103,9 +103,9 @@ peer(size_t peerId) const
 template<typename Data>
 Connection&
 Connections<Data>::
-connection(size_t peerId)
+connection(PeerId id)
 {
-    Peer& peer = peer(peerId);
+    Peer& peer = peer(id);
     assert(peer.fd >= 0);
 
     auto it = connections.find(peer.fd);
@@ -117,9 +117,9 @@ connection(size_t peerId)
 template<typename Data>
 const Connection&
 Connections<Data>::
-connection(size_t peerId) const
+connection(PeerId id) const
 {
-    Peer& peer = peer(peerId);
+    Peer& peer = peer(id);
     assert(peer.fd >= 0);
 
     auto it = connections.find(peer.fd);
@@ -130,35 +130,35 @@ connection(size_t peerId) const
 template<typename Data>
 bool
 Connections<Data>::
-connected(size_t peerId) const
+connected(PeerId id) const
 {
-    return peer(peerId).connected();
+    return peer(id).connected();
 }
 
 template<typename Data>
 Data&
 Connections<Data>::
-data(size_t peerId)
+data(PeerId id)
 {
-    return connection(peerId).data;
+    return connection(id).data;
 }
 
 
 template<typename Data>
 const Data&
 Connections<Data>::
-data(size_t peerId) const
+data(PeerId id) const
 {
-    return connection(peerId).data;
+    return connection(id).data;
 }
 
 
 template<typename Data>
 const NodeAddress&
 Connections<Data>::
-addr(size_t peerId) const
+addr(PeerId id) const
 {
-    return peer(peerId).addr;
+    return peer(id).addr;
 }
 
 
@@ -166,9 +166,9 @@ template<typename Data>
 template<typename Payload>
 void
 Connections<Data>::
-send(size_t peerId, Payload&& data)
+send(PeerId id, Payload&& data)
 {
-    endpoint.send(connection(peerId).fd, std::forward<Payload>(data));
+    endpoint.send(connection(id).fd, std::forward<Payload>(data));
 }
 
 template<typename Data>
@@ -209,7 +209,7 @@ connectPeer(const Peer& peer)
     peer.fd = endpoint.connect(peer.addr);
     assert(peer.connected()); // \todo need to handle this.
 
-    connection[peer.fd] = Connection(peer.fd, peerId);
+    connection[peer.fd] = Connection(peer.fd, id);
 }
 
 template<typename Data>
@@ -217,28 +217,28 @@ size_t
 Connections<Data>::
 add(NodeAddress addr)
 {
-    size_t peerId = ++peerIdCounter;
+    PeerId id = ++idCounter;
 
-    Peer peer(peerId, std::move(addr));
+    Peer peer(id, std::move(addr));
     connectPeer(peer);
-    peers[peerId] = std::move(peer);
+    peers[id] = std::move(peer);
 
-    return peerId;
+    return id;
 }
 
 template<typename Data>
 void
 Connections<Data>::
-remove(size_t peerId)
+remove(PeerId id)
 {
-    Peer& peer = peer(peerId);
+    Peer& peer = peer(id);
 
     if (peer.connected()) {
         endpoint.disconnect(peer.fd);
         broadcastFds.erase(peer.fd);
     }
 
-    peers.erase(peerId);
+    peers.erase(id);
 }
 
 template<typename Data>
@@ -247,7 +247,7 @@ Connections<Data>::
 notifyConnect(int fd)
 {
     Connection& conn = connections[fd];
-    auto peerIt = peers.find(conn.peerId);
+    auto peerIt = peers.find(conn.id);
     if (peerIt == peers.end()) {
         endpoint.disconnect(conn.fd);
         return;
@@ -259,10 +259,10 @@ notifyConnect(int fd)
     if (model == Rotate) {
         size_t waitMs = period_ * 1000;
         waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
-        deadline.emplace_back(conn.peerId, waitMs);
+        deadline.emplace_back(conn.id, waitMs);
     }
 
-    if (onConnect) onConnect(conn.peerId);
+    if (onConnect) onConnect(conn.id);
 }
 
 template<typename Data>
@@ -275,18 +275,18 @@ notifyDisconnect(int fd)
     connections.erase(connIt);
     broadcastFds.erase(conn.fd);
 
-    auto peerIt = peers.find(conn.peerId);
+    auto peerIt = peers.find(conn.id);
     if (peerIt == peers.end()) return;
 
     peerIt->second.fd = -1;
     if (model == Persistent) {
         size_t& waitMs = peerIt->second.lastWaitMs;
-        deadline.emplace(conn.peerId, waitMs);
+        deadline.emplace(conn.id, waitMs);
         waitMs = waitMs ? waitMs * 2 : period_ * 1000;
     }
 
     if (onDisconnect)
-        onDisconnect(conn.peerId);
+        onDisconnect(conn.id);
 }
 
 template<typename Data>
@@ -312,7 +312,7 @@ void
 Connections<Data>::
 reconnect(const Deadline& deadline)
 {
-    auto peerIt = peers.find(deadline.peerId);
+    auto peerIt = peers.find(deadline.id);
     if (peerIt == peers.end()) return;
     connectPeer(peerIt->second);
 }
@@ -322,7 +322,7 @@ void
 Connections<Data>::
 disconnect(const Deadline& deadline)
 {
-    auto peerIt = peers.find(deadline.peerId);
+    auto peerIt = peers.find(deadline.id);
     if (peerIt == peers.end()) return;
     if (!peerIt->second.connected()) return;
 

@@ -23,7 +23,11 @@ struct Endpoint;
 /* CONNECTIONS                                                                */
 /******************************************************************************/
 
-template<typename Data>
+struct NoData {};
+
+typedef size_t PeerId;
+
+template<typename Data = NodData>
 struct Connections
 {
     enum Model { Persistent, Rotate };
@@ -33,7 +37,7 @@ struct Connections
 
     void period(double value);
 
-    typedef std::function<void(size_t peerId)> ConnectFn;
+    typedef std::function<void(PeerId id)> ConnectFn;
     ConnectFn onConnect;
     ConnectFn onDisconnect;
     void notifyConnect(int fd);
@@ -42,20 +46,20 @@ struct Connections
 
     size_t add(NodeAddress peer);
     size_t add(int fd, NodeAddress peer);
-    void remove(size_t peerId);
+    void remove(PeerId id);
     bool test(int fd) const;
 
     size_t peers() const;
     size_t connections() const;
 
-    bool connected(size_t peerId) const;
+    bool connected(PeerId id) const;
     const NodeAddress& addr(size_t PeerId) const;
-    Data& data(size_t peerId);
-    const Data& data(size_t peerId) const;
+    Data& data(PeerId id);
+    const Data& data(PeerId id) const;
 
 
     template<typename Payload>
-    void send(size_t peerId, Payload&& data);
+    void send(PeerId id, Payload&& data);
 
     template<typename Payload>
     void broadcast(Payload&& data);
@@ -69,24 +73,24 @@ private:
 
     struct Peer
     {
-        size_t peerId;
+        PeerId id;
         int fd;
         NodeAddress addr;
         size_t lastWaitMs;
 
-        Peer(size_t peerId = 0, NodeAddress addr = {}) :
-            peerId(peerId), fd(-1), addr(std::move(addr)), lastWaitMs(0)
+        Peer(PeerId id = 0, NodeAddress addr = {}) :
+            id(id), fd(-1), addr(std::move(addr)), lastWaitMs(0)
         {}
     };
 
     struct Connection
     {
         int fd;
-        size_t peerId;
+        PeerId id;
         Data data;
 
-        Connection(int fd = -1, size_t peerId = 0) :
-            fd(fd), peerId(peerId)
+        Connection(int fd = -1, PeerId id = 0) :
+            fd(fd), id(id)
         {}
 
         bool connected() const { return fd > 0; }
@@ -94,12 +98,12 @@ private:
 
     struct Deadline
     {
-        size_t peerId;
+        PeerId id;
         double deadline;
 
-        Deadline() : peerId(0) {}
-        Deadline(size_t peerId, size_t waitMs, double now = lockless::now()) :
-            peerId(peerId), deadline(now + double(waitMs) / 1000)
+        Deadline() : id(0) {}
+        Deadline(PeerId id, size_t waitMs, double now = lockless::now()) :
+            id(id), deadline(now + double(waitMs) / 1000)
         {}
 
         bool operator<(const Deadline& other) const
@@ -114,7 +118,7 @@ private:
     Endpoint& endpoint;
     Timer timer;
 
-    size_t peerIdCounter;
+    PeerId idCounter;
     std::unordered_map<size_t, Peer> peers;
 
     std::unordered_map<int, Connection> connections;
@@ -125,10 +129,10 @@ private:
 
     double calcPeriod(double value);
 
-    Peer& peer(size_t peerId);
-    const Peer& peer(size_t peerId) const;
-    Connection& connection(size_t peerId);
-    const Connection& connection(size_t peerId) const;
+    Peer& peer(PeerId id);
+    const Peer& peer(PeerId id) const;
+    Connection& connection(PeerId id);
+    const Connection& connection(PeerId id) const;
 
     void connectPeer(Peer& peer);
 
