@@ -104,9 +104,16 @@ struct Pack<Address>
 
 
 /******************************************************************************/
+/* NODE ADDRESS                                                               */
+/******************************************************************************/
+
+typedef std::vector<Address> NodeAddress;
+
+
+/******************************************************************************/
 /* NETWORK INTERFACES                                                         */
 /******************************************************************************/
 
-std::vector<Address> networkInterfaces(bool excludeLoopback = false);
+NodeAddress networkInterfaces(bool excludeLoopback = false);
 
 } // slick

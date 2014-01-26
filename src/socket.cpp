@@ -119,9 +119,9 @@ connect(const Address& addr)
 
 Socket
 Socket::
-connect(const std::vector<Address>& addrs)
+connect(const NodeAddress& node)
 {
-    for (const auto& addr : addrs) {
+    for (const auto& addr : node) {
         Socket socket = connect(addr);
         if (socket) return std::move(socket);
     }

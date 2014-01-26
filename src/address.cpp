@@ -71,10 +71,10 @@ Address(struct sockaddr* addr, socklen_t addrlen)
 /* NETWORK INTERFACES                                                         */
 /******************************************************************************/
 
-std::vector<Address>
+NodeAddress
 networkInterfaces(bool excludeLoopback)
 {
-    std::vector<Address> result;
+    NodeAddress result;
     unsigned include = IFF_UP | IFF_RUNNING;
     unsigned exclude = excludeLoopback ? IFF_LOOPBACK : 0;
 

@@ -59,7 +59,7 @@ struct Socket
     operator bool() const { return fd_ >= 0; }
 
     static Socket connect(const Address& addr);
-    static Socket connect(const std::vector<Address>& addrs);
+    static Socket connect(const NodeAddress& node);
     static Socket accept(int passiveFd);
 
 private:

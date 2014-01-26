@@ -110,14 +110,14 @@ onWatch(const std::string& key,
         return;
     }
 
-    std::vector<Address> addrs;
+    NodeAddress node;
     Payload filterData;
-    unpackAll(data, addrs, filterData);
+    unpackAll(data, node, filterData);
 
     const auto& watch = activeWatches[handle];
     if (watch.filter && !watch.filter(filterData)) return;
 
-    int fd = Endpoint::connect(addrs);
+    int fd = Endpoint::connect(node);
     assert(fd > 0);
     connections[fd] = Connection(key, keyId);
 }

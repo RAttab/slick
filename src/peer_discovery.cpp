@@ -502,7 +502,7 @@ ConstPackIt
 PeerDiscovery::
 onQuery(ConnState& conn, ConstPackIt it, ConstPackIt last)
 {
-    NodeLocation node;
+    NodeAddress node;
     std::vector<QueryItem> items;
     it = unpackAll(it, last, node, items);
 
@@ -575,7 +575,7 @@ onNodes(ConnState& conn, ConstPackIt it, ConstPackIt last)
 
 void
 PeerDiscovery::
-sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node)
+sendFetch(const std::string& key, const UUID& keyId, const NodeAddress& node)
 {
     auto& list = fetches[key];
     auto it = list.insert(std::make_pair(keyId, Fetch(node))).first;

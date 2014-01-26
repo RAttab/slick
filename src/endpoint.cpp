@@ -211,9 +211,9 @@ connect(const Address& addr)
 
 int
 Endpoint::
-connect(const std::vector<Address>& addrs)
+connect(const NodeAddress& node)
 {
-    auto socket = Socket::connect(addrs);
+    auto socket = Socket::connect(node);
     if (!socket) return 0;
 
     int fd = socket.fd();

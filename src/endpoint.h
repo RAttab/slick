@@ -74,7 +74,7 @@ struct Endpoint
 
     void connect(Socket&& socket);
     int connect(const Address& addr);
-    int connect(const std::vector<Address>& addrs);
+    int connect(const NodeAddress& node);
 
     void disconnect(int fd);
 
@@ -166,8 +166,8 @@ struct Connection
         endpoint(endpoint), fd(endpoint.connect(addr))
     {}
 
-    Connection(Endpoint& endpoint, const std::vector<Address>& addrs) :
-        endpoint(endpoint), fd(endpoint.connect(addrs))
+    Connection(Endpoint& endpoint, const NodeAddress& node) :
+        endpoint(endpoint), fd(endpoint.connect(node))
     {}
 
     ~Connection() { endpoint.disconnect(fd); }

@@ -38,10 +38,7 @@ struct PeerDiscovery : public Discovery
 
         DefaultExpThresh = 1000 * 10,
     };
-    typedef std::vector<Address> NodeLocation;
-
-    PeerDiscovery(
-            const std::vector<Address>& seeds, Port port = DefaultPort);
+    PeerDiscovery(const std::vector<Address>& seeds, Port port = DefaultPort);
     virtual ~PeerDiscovery() { shutdown(); }
 
     virtual int fd() const { return poller.fd(); }
@@ -61,15 +58,15 @@ struct PeerDiscovery : public Discovery
     void period(size_t ms = DefaultPeriod);
 
     const UUID& id() const { return myId; }
-    const NodeLocation& node() const { return myNode; }
+    const NodeAddress& node() const { return myNode; }
 
 private:
 
     typedef std::string QueryItem;
     typedef std::tuple<std::string, UUID> FetchItem;
     typedef std::tuple<std::string, UUID, Payload> DataItem;
-    typedef std::tuple<UUID, NodeLocation, size_t> NodeItem;
-    typedef std::tuple<std::string, UUID, NodeLocation, size_t> KeyItem;
+    typedef std::tuple<UUID, NodeAddress, size_t> NodeItem;
+    typedef std::tuple<std::string, UUID, NodeAddress, size_t> KeyItem;
 
     struct ConnState
     {
@@ -106,7 +103,7 @@ private:
     struct Item
     {
         UUID id;
-        NodeLocation addrs;
+        NodeAddress addrs;
         double expiration;
 
         Item() : expiration(0) {}
@@ -126,7 +123,7 @@ private:
             expiration(now * 1000 + std::get<2>(item))
         {}
 
-        Item(UUID id, NodeLocation addrs, size_t ttl, double now = lockless::wall()) :
+        Item(UUID id, NodeAddress addrs, size_t ttl, double now = lockless::wall()) :
             id(std::move(id)), addrs(std::move(addrs)), expiration(now * 1000 + ttl)
         {}
 
@@ -175,10 +172,10 @@ private:
 
     struct Fetch
     {
-        NodeLocation node;
+        NodeAddress node;
         size_t delay;
 
-        explicit Fetch(NodeLocation node) :
+        explicit Fetch(NodeAddress node) :
             node(std::move(node)), delay(1)
         {}
     };
@@ -202,7 +199,7 @@ private:
     size_t connExpThresh_;
 
     UUID myId;
-    NodeLocation myNode;
+    NodeAddress myNode;
 
     SortedVector<Item> nodes;
     std::vector<Address> seeds;
@@ -252,7 +249,7 @@ private:
     void sendInitQueries(int fd);
     void sendInitKeys(int fd);
     void sendInitNodes(int fd);
-    void sendFetch(const std::string& key, const UUID& keyId, const NodeLocation& node);
+    void sendFetch(const std::string& key, const UUID& keyId, const NodeAddress& node);
 
     std::pair<bool, UUID> expireItem(SortedVector<Item>& list, double now);
     bool expireKeys(double now);
