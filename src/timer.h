@@ -19,7 +19,7 @@ namespace slick {
 
 struct Timer
 {
-    Timer(double delay, double init = 0);
+    explicit Timer(double delay = 0, double init = 0);
     ~Timer();
 
     typedef std::function<void(uint64_t count)> TimerFn;
