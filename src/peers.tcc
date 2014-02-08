@@ -15,9 +15,8 @@ namespace slick {
 
 
 /******************************************************************************/
-/* CONNECTIONS                                                                */
+/* PEERS                                                                      */
 /******************************************************************************/
-
 
 template<typename Data>
 Peers<Data>::
@@ -29,7 +28,14 @@ Peers(PeerModel model, Endpoint& endpoint, double period) :
     rng(lockless::rdtsc())
 {
     using namespace std::placeholders;
-    timer.onTimer = std::bind(&Peers<Data>::onTimer, this, _1);
+
+    deadlines.onTimeout = std::bind(&Peers<Data>::onTimeout, this, _1);
+    poller.add(deadlines);
+
+    if (model == Rotate) {
+        timer.onTimer = std::bind(&Peers<Data>::topupConnections, this);
+        poller.add(timer);
+    }
 }
 
 template<typename Data>
@@ -190,14 +196,6 @@ test(int fd) const
     return connections.count(fd);
 }
 
-template<typename Data>
-void
-Peers<Data>::
-poll(size_t timeoutMs)
-{
-    timer.poll(timeoutMs);
-}
-
 
 template<typename Data>
 void
@@ -239,6 +237,7 @@ remove(PeerId id)
     }
 
     peers.erase(id);
+    deadlines.remove(id);
 }
 
 template<typename Data>
@@ -259,7 +258,7 @@ notifyConnect(int fd)
     if (model == Rotate) {
         size_t waitMs = period_ * 1000;
         waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
-        deadline.emplace_back(conn.id, waitMs);
+        deadlines.setTTL(conn.id, waitMs);
     }
 
     if (onConnect) onConnect(conn.id);
@@ -281,7 +280,7 @@ notifyDisconnect(int fd)
     peerIt->second.fd = -1;
     if (model == Persistent) {
         size_t& waitMs = peerIt->second.lastWaitMs;
-        deadline.emplace(conn.id, waitMs);
+        deadlines.setTTL(conn.id, waitMs);
         waitMs = waitMs ? waitMs * 2 : period_ * 1000;
     }
 
@@ -292,38 +291,30 @@ notifyDisconnect(int fd)
 template<typename Data>
 void
 Peers<Data>::
-onTimer(uint64_t)
+onTimeout(PeerId id)
 {
-    double now = lockless::wall();
-    while (deadlines.top().deadline <= now) {
-
-        if (model == Persistent)
-            reconnect(deadlines.front());
-        else disconnect(deadline.front());
-
-        deadline.pop();
-    }
-
-    if (model == Rotate) topupConnections(now);
+    if (model == Persistent)
+        reconnect(id);
+    else disconnect(id);
 }
 
 template<typename Data>
 void
 Peers<Data>::
-reconnect(const Deadline& deadline)
+reconnect(PeerId id)
 {
-    auto peerIt = peers.find(deadline.id);
-    if (peerIt == peers.end()) return;
+    auto peerIt = peers.find(id);
+    assert(peerIt != peers.end());
     connectPeer(peerIt->second);
 }
 
 template<typename Data>
 void
 Peers<Data>::
-disconnect(const Deadline& deadline)
+disconnect(PeerId id)
 {
-    auto peerIt = peers.find(deadline.id);
-    if (peerIt == peers.end()) return;
+    auto peerIt = peers.find(id);
+    assert(peerIt != peers.end());
     if (!peerIt->second.connected()) return;
 
     endpoint.disconnect(peerIt->second.fd);
@@ -332,8 +323,12 @@ disconnect(const Deadline& deadline)
 template<typename Data>
 void
 Peers<Data>::
-topupConnections(double now)
+topupConnections()
 {
+    if (model != Rotate) return;
+
+    double now = lockless::wall();
+
     size_t targetSize = lockless::log2(peers.size());
     if (targetSize < connections.size()) return;
 

@@ -63,8 +63,8 @@ struct Peers
     void broadcast(Payload&& data);
 
 
-    int fd() const { timer.fd; }
-    void poll(size_t timeoutMs = 0);
+    int fd() const { poller.fd; }
+    void poll(size_t timeoutMs = 0) { poller.poll(timeoutMs); }
     void shutdown();
 
 private:
@@ -94,24 +94,11 @@ private:
         bool connected() const { return fd > 0; }
     };
 
-    struct Deadline
-    {
-        PeerId id;
-        double deadline;
-
-        Deadline() : id(0) {}
-        Deadline(PeerId id, size_t waitMs, double now = lockless::now()) :
-            id(id), deadline(now + double(waitMs) / 1000)
-        {}
-
-        bool operator<(const Deadline& other) const
-        {
-            return deadline < other.deadline;
-        }
-    };
 
     Model model;
     double period_;
+
+    PollSource poller;
 
     Endpoint& endpoint;
     Timer timer;
@@ -123,7 +110,7 @@ private:
     SortedVector<int> broadcastFds;
 
     std::mt19937 rng;
-    std::priority_queue<Deadline> deadlines;
+    TimeoutQueue<PeerId> deadlines;
 
     double calcPeriod(double value);
 
@@ -135,8 +122,9 @@ private:
     void connectPeer(Peer& peer);
 
     void onTimer(uint64_t);
+    void onTimeout(PeerId);
     void reconnect(const Deadline& deadline);
-    void topupConnections(double now);
+    void topupConnections();
 };
 
 } // slick
