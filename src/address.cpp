@@ -79,7 +79,7 @@ addrToNode(Address addr)
 std::vector<NodeAddress>
 addrToNode(std::vector<Address> addrs)
 {
-    NodeAddress result;
+    std::vector<NodeAddress> result;
     result.reserve(addrs.size());
 
     for (auto& addr : addrs)
