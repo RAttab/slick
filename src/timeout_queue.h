@@ -29,6 +29,8 @@ struct TimeoutQueue
     void setTTL(const Key& key, ClockT ttl);
     void remove(const Key& key);
 
+    ClockT deadline(const Key& key) const;
+
 private:
 
     void updateTimer(ClockT now = clock())
@@ -121,5 +123,15 @@ remove(const Key& key)
     keys.erase(key);
 }
 
+
+template<typename Key, typename Clock>
+auto
+TimeoutQueue<Key, Clock>::
+deadline(const Key& key) const -> ClockT
+{
+    auto it = keys.find(key);
+    assert(it != keys.end());
+    return it->second.deadline;
+}
 
 } // slick
