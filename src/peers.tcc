@@ -25,6 +25,7 @@ Peers(PeerModel model, Endpoint& endpoint, double period) :
     endpoint(endpoint),
     period_(calcPeriod(period)),
     timer(period_),
+    idCounter(0),
     rng(lockless::rdtsc())
 {
     using namespace std::placeholders;
@@ -198,6 +199,17 @@ test(int fd) const
 
 
 template<typename Data>
+PeerId
+Peers<Data>::
+id(int fd) const
+{
+    auto it = connections.find(fd);
+    if (it == connetions.end()) return 0;
+    return it->second.id;
+}
+
+
+template<typename Data>
 void
 Peers<Data>::
 connectPeer(const Peer& peer)
@@ -211,7 +223,7 @@ connectPeer(const Peer& peer)
 }
 
 template<typename Data>
-size_t
+PeerId
 Peers<Data>::
 add(NodeAddress addr)
 {

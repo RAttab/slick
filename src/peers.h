@@ -23,11 +23,12 @@ struct Endpoint;
 /* CONNECTIONS                                                                */
 /******************************************************************************/
 
-struct NoData {};
+namespace details { struct NoData {}; }
+
 typedef size_t PeerId;
 enum class PeerModel { Persistent, Rotate };
 
-template<typename ConnectionData = NoData>
+template<typename Data = details::NoData>
 struct Peers
 {
     Peers(PeerModel model, Endpoint& endpoint, double period);
@@ -42,16 +43,16 @@ struct Peers
     void notifyDisconnect(int fd);
 
 
-    size_t add(NodeAddress peer);
-    size_t add(int fd, NodeAddress peer);
+    PeerId add(NodeAddress peer);
     void remove(PeerId id);
     bool test(int fd) const;
+    PeerId id(int fd) const;
 
     size_t peers() const;
     size_t connections() const;
 
     bool connected(PeerId id) const;
-    const NodeAddress& addr(size_t PeerId) const;
+    const NodeAddress& addr(PeerId Id) const;
     ConnectionData& data(PeerId id);
     const ConnectionData& data(PeerId id) const;
 
@@ -61,7 +62,6 @@ struct Peers
 
     template<typename Payload>
     void broadcast(Payload&& data);
-
 
     int fd() const { poller.fd; }
     void poll(size_t timeoutMs = 0) { poller.poll(timeoutMs); }
@@ -85,7 +85,7 @@ private:
     {
         int fd;
         PeerId id;
-        ConnectionData data;
+        Data data;
 
         Connection(int fd = -1, PeerId id = 0) :
             fd(fd), id(id)
@@ -104,7 +104,7 @@ private:
     Timer timer;
 
     PeerId idCounter;
-    std::unordered_map<size_t, Peer> peers;
+    std::unordered_map<PeerId, Peer> peers;
 
     std::unordered_map<int, Connection> connections;
     SortedVector<int> broadcastFds;
