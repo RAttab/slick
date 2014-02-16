@@ -26,10 +26,6 @@ struct Discovery
     typedef size_t WatchHandle;
     typedef std::function<void(WatchHandle, const UUID&, const Payload&)> WatchFn;
 
-    virtual int fd() const = 0;
-    virtual void poll(size_t timeoutMs = 0) = 0;
-    virtual void shutdown() {}
-
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch) = 0;
     virtual void forget(const std::string& key, WatchHandle handle) = 0;
     virtual void lost(const std::string& key, const UUID& keyId) = 0;

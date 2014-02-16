@@ -164,8 +164,6 @@ BOOST_AUTO_TEST_CASE(linearPoolTest)
     BOOST_CHECK(done);
 
     poller.join();
-    node0->shutdown();
-    node1->shutdown();
     pool.shutdown();
 
     printf("discovery in %s\n\n", fmtElapsed(elapsed).c_str());

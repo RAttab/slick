@@ -28,7 +28,7 @@ namespace slick {
 /* PEER DISCOVERY                                                             */
 /******************************************************************************/
 
-struct PeerDiscovery : public Discovery
+struct PeerDiscovery : public Discovery, public ThreadAwarePollable
 {
     enum {
         DefaultPort = 18888,
@@ -39,11 +39,11 @@ struct PeerDiscovery : public Discovery
         DefaultExpThresh = 1000 * 10,
     };
     PeerDiscovery(const std::vector<Address>& seeds, Port port = DefaultPort);
-    virtual ~PeerDiscovery() { shutdown(); }
+    virtual ~PeerDiscovery() { stopPolling(); }
 
-    virtual int fd() const { return poller.fd(); }
-    virtual void poll(size_t timeoutMs = 0);
-    virtual void shutdown();
+    int fd() const { return poller.fd(); }
+    void poll(size_t timeoutMs = 0);
+    void stopPolling();
 
     virtual WatchHandle discover(const std::string& key, const WatchFn& watch);
     virtual void forget(const std::string& key, WatchHandle handle);
@@ -219,7 +219,6 @@ private:
     std::mt19937 rng;
 
     SourcePoller poller;
-    IsPollThread isPollThread;
     Endpoint endpoint;
     Timer timer;
 

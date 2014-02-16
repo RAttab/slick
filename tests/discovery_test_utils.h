@@ -58,8 +58,6 @@ struct NodePool
     {
         pollState = Stop;
         pollThread.join();
-
-        for (auto node : nodes_) node->shutdown();
     }
 
     const std::vector<PeerDiscovery*> nodes() const { return nodes_; }

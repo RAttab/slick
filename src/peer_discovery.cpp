@@ -148,9 +148,9 @@ poll(size_t timeoutMs)
 
 void
 PeerDiscovery::
-shutdown()
+stopPolling()
 {
-    isPollThread.unset();
+    ThreadAwarePollable::stopPolling();
     retracts.poll();
     publishes.poll();
     discovers.poll();
