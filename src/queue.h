@@ -2,7 +2,7 @@
    Rémi Attab (remi.attab@gmail.com), 30 Nov 2013
    FreeBSD-style copyright and disclaimer apply
 
-   Lockfree queue specialized for our endpoints.
+   Partially lock-free queue specialized for the defer mechanism.
 */
 
 #pragma once
@@ -23,7 +23,6 @@ namespace slick {
 /* QUEUE                                                                      */
 /******************************************************************************/
 
-/** Single-Consumer Multi-Producer queue with signaling. */
 template<typename T, size_t Size>
 struct Queue
 {

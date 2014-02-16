@@ -103,7 +103,6 @@ private:
     double period_;
 
     PollSource poller;
-
     Endpoint& endpoint;
     Timer timer;
 
