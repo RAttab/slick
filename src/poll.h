@@ -48,6 +48,88 @@ private:
 
 
 /******************************************************************************/
+/* START POLLING                                                              */
+/******************************************************************************/
+
+typedef std::function<void()> StartPollingFn;
+
+namespace details {
+
+template<typename T>
+struct HasStartPolling
+{
+    template<typename U> static std::true_type test(decltype(&U::startPolling));
+    template<typename U> static std::false_type test(...);
+
+    typedef decltype(test<T>(0)) type;
+    static constexpr bool value = std::is_same<type, std::true_type>::value;
+};
+
+template<typename T>
+StartPollingFn startPollingFn(T& object, std::true_type)
+{
+    return std::bind(&T::startPolling, &object);
+}
+
+template<typename T>
+StartPollingFn startPollingFn(T&, std::false_type)
+{
+    return StartPollingFn();
+}
+
+} // namespace details
+
+
+template<typename T>
+StartPollingFn startPollingFn(T& object)
+{
+    return details::startPollingFn(
+            object, typename details::HasStartPolling<T>::type());
+}
+
+
+/******************************************************************************/
+/* STOP POLLING                                                               */
+/******************************************************************************/
+
+typedef std::function<void()> StopPollingFn;
+
+namespace details {
+
+template<typename T>
+struct HasStopPolling
+{
+    template<typename U> static std::true_type test(decltype(&U::stopPolling));
+    template<typename U> static std::false_type test(...);
+
+    typedef decltype(test<T>(0)) type;
+    static constexpr bool value = std::is_same<type, std::true_type>::value;
+};
+
+template<typename T>
+StopPollingFn stopPollingFn(T& object, std::true_type)
+{
+    return std::bind(&T::stopPolling, &object);
+}
+
+template<typename T>
+StopPollingFn stopPollingFn(T&, std::false_type)
+{
+    return StopPollingFn();
+}
+
+} // namespace details
+
+
+template<typename T>
+StopPollingFn stopPollingFn(T& object)
+{
+    return details::stopPollingFn(
+            object, typename details::HasStopPolling<T>::type());
+}
+
+
+/******************************************************************************/
 /* SOURCE POLLER                                                              */
 /******************************************************************************/
 
@@ -63,24 +145,41 @@ struct SourcePoller
     typedef std::function<void()> SourceFn;
 
     int fd() const { return poller.fd(); }
+    void poll(size_t timeout = 0);
+    void startPolling();
+    void stopPolling();
 
     template<typename T>
     void add(T& source)
     {
         T* pSource = &source;
-        add(source.fd(), [=] { pSource->poll(); });
+
+        auto sourceFn = [=] { pSource->poll(); };
+        auto startFn = startPollingFn(source);
+        auto stopFn = stopPollingFn(source);
+
+        add(source.fd(), sourceFn, startFn, stopFn);
     }
-    void add(int fd, const SourceFn& fn);
+
+    void add(int fd,
+            const SourceFn& sourceFn,
+            const StartPollingFn& startFn = {},
+            const StopPollingFn& stopFn = {});
 
     template<typename T>
     void del(T& source) { del(source.fd()); }
     void del(int fd);
 
-    void poll(size_t timeout = 0);
-
 private:
     Epoll poller;
-    std::unordered_map<int, SourceFn> sources;
+
+    struct Callbacks
+    {
+        SourceFn sourceFn;
+        StartPollingFn startFn;
+        StopPollingFn stopFn;
+    };
+    std::unordered_map<int, Callbacks> sources;
 };
 
 
@@ -107,6 +206,29 @@ struct IsPollThread
 
 private:
     size_t pollThread;
+};
+
+
+/******************************************************************************/
+/* THREAD AWARE POLLABLE                                                      */
+/******************************************************************************/
+
+struct ThreadAwarePollable
+{
+    virtual ~ThreadAwarePollable() {}
+
+    virtual void startPolling()
+    {
+        isPollThread.set();
+    }
+
+    virtual void stopPolling()
+    {
+        isPollThread.unset();
+    }
+
+protected:
+    IsPollThread isPollThread;
 };
 
 

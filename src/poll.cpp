@@ -87,12 +87,15 @@ poll(int timeoutMs)
 
 void
 SourcePoller::
-add(int fd, const SourceFn& fn)
+add(    int fd,
+        const SourceFn& sourceFn,
+        const StartPollingFn& startFn,
+        const StopPollingFn& stopFn)
 {
     assert(fd);
-    assert(fn);
+    assert(sourceFn);
 
-    sources[fd] = fn;
+    sources[fd] = { sourceFn, startFn, stopFn };
     poller.add(fd);
 }
 
@@ -106,8 +109,26 @@ poll(size_t timeout)
 {
     while (poller.poll(timeout)) {
         struct epoll_event ev = poller.next();
-        sources[ev.data.fd]();
+        sources[ev.data.fd].sourceFn();
     }
+}
+
+void
+SourcePoller::
+startPolling()
+{
+    for (const auto& source : sources)
+        if (source.second.startFn)
+            source.second.startFn();
+}
+
+void
+SourcePoller::
+stopPolling()
+{
+    for (const auto& source : sources)
+        if (source.second.stopFn)
+            source.second.stopFn();
 }
 
 
@@ -120,7 +141,11 @@ PollThread::
 run()
 {
     isDone = false;
-    th = std::thread([=] { while(!isDone) poll(100); });
+    th = std::thread([=] {
+                startPolling();
+                while(!isDone) poll(100);
+                stopPolling();
+            });
 }
 
 void
@@ -131,7 +156,5 @@ join()
     isDone = true;
     th.join();
 }
-
-
 
 } // slick
