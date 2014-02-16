@@ -223,6 +223,35 @@ connectPeer(const Peer& peer)
 }
 
 template<typename Data>
+size_t
+Peers<Data>::
+connectionsTargetSize() const
+{
+    return model == Rotate ? lockless::log2(peers.size()) : peers.size();
+}
+
+template<typename Data>
+void
+Peers<Data>::
+addRotateDeadline(PeerId id)
+{
+    size_t waitMs = period_ * 1000;
+    waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
+    deadlines.setTTL(conn.id, waitMs);
+}
+
+template<typename Data>
+void
+Peers<Data>::
+addReconnectDeadline(Peer& peer)
+{
+    size_t& waitMs = peer.lastWaitMs;
+    deadlines.setTTL(peer.id, waitMs);
+    waitMs = waitMs ? waitMs * 2 : period_ * 1000;
+}
+
+
+template<typename Data>
 PeerId
 Peers<Data>::
 add(NodeAddress addr)
@@ -293,16 +322,6 @@ transfer(PeerId id, Peers<OtherData>& other)
 template<typename Data>
 void
 Peers<Data>::
-addRotateDeadline(PeerId id)
-{
-    size_t waitMs = period_ * 1000;
-    waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
-    deadlines.setTTL(conn.id, waitMs);
-}
-
-template<typename Data>
-void
-Peers<Data>::
 notifyConnect(int fd)
 {
     Connection& conn = connections[fd];
@@ -314,7 +333,6 @@ notifyConnect(int fd)
 
     broadcastFds.insert(fd);
     peerIt->second.lastWaitMs = 0;
-
     if (model == Rotate) addRotateDeadline(conn.id);
 
     if (onConnect) onConnect(conn.id);
@@ -334,11 +352,7 @@ notifyDisconnect(int fd)
     if (peerIt == peers.end()) return;
 
     peerIt->second.fd = -1;
-    if (model == Persistent) {
-        size_t& waitMs = peerIt->second.lastWaitMs;
-        deadlines.setTTL(conn.id, waitMs);
-        waitMs = waitMs ? waitMs * 2 : period_ * 1000;
-    }
+    if (model == Persistent) addReconnectDeadline(peerIt->second);
 
     if (onDisconnect)
         onDisconnect(conn.id);
@@ -374,14 +388,6 @@ disconnect(PeerId id)
     if (!peerIt->second.connected()) return;
 
     endpoint.disconnect(peerIt->second.fd);
-}
-
-template<typename Data>
-size_t
-Peers<Data>::
-connectionsTargetSize() const
-{
-    return model == Rotate ? lockless::log2(peers.size()) : peers.size();
 }
 
 template<typename Data>

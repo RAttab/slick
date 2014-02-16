@@ -123,10 +123,10 @@ private:
     Connection& connection(PeerId id);
     const Connection& connection(PeerId id) const;
 
-    void connectPeer(Peer& peer);
-
     size_t connectionsTargetSize() const;
+    void connectPeer(Peer& peer);
     void addRotateDeadline(PeerId id);
+    void addReconnectDeadline(Peer& peer);
 
     void onTimer(uint64_t);
     void onTimeout(PeerId);
