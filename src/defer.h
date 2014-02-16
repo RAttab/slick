@@ -8,6 +8,7 @@
 #pragma once
 
 #include "queue.h"
+#include "notify.h"
 #include "utils.h"
 
 #include <tuple>

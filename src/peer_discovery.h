@@ -28,7 +28,7 @@ namespace slick {
 /* PEER DISCOVERY                                                             */
 /******************************************************************************/
 
-struct PeerDiscovery : public Discovery, public ThreadAwarePollable
+struct PeerDiscovery : public ThreadAwareDiscovery
 {
     enum {
         DefaultPort = 18888,
@@ -43,14 +43,6 @@ struct PeerDiscovery : public Discovery, public ThreadAwarePollable
 
     int fd() const { return poller.fd(); }
     void poll(size_t timeoutMs = 0);
-    void stopPolling();
-
-    virtual WatchHandle discover(const std::string& key, const WatchFn& watch);
-    virtual void forget(const std::string& key, WatchHandle handle);
-    virtual void lost(const std::string& key, const UUID& keyId);
-
-    virtual void publish(const std::string& key, Payload&& data);
-    virtual void retract(const std::string& key);
 
     void ttl(size_t ttl = DefaultTTL) { ttl_ = ttl; }
     void connExpThresh(size_t ms = DefaultExpThresh) {connExpThresh_ = ms; }
@@ -59,6 +51,15 @@ struct PeerDiscovery : public Discovery, public ThreadAwarePollable
 
     const UUID& id() const { return myId; }
     const NodeAddress& node() const { return myNode; }
+
+protected:
+
+    virtual void discoverImpl(const std::string& key, WatchHandle handle, const WatchFn& watch);
+    virtual void forgetImpl(const std::string& key, WatchHandle handle);
+    virtual void lostImpl(const std::string& key, const UUID& keyId);
+
+    virtual void publishImpl(const std::string& key, Payload&& data);
+    virtual void retractImpl(const std::string& key);
 
 private:
 
@@ -162,8 +163,10 @@ private:
         WatchHandle handle;
         WatchFn watch;
 
-        Watch(WatchHandle handle = 0) : handle(handle) {}
-        Watch(WatchFn watch);
+        explicit Watch(WatchHandle handle, WatchFn watch = {}) :
+            handle(handle), watch(std::move(watch))
+        {}
+
         bool operator< (const Watch& other) const
         {
             return handle < other.handle;
@@ -223,16 +226,7 @@ private:
     Timer timer;
 
 
-    enum { QueueSize = 1 << 4 };
-    Defer<QueueSize, std::string> retracts;
-    Defer<QueueSize, std::string, Payload> publishes;
-    Defer<QueueSize, std::string, Watch> discovers;
-    Defer<QueueSize, std::string, WatchHandle> forgets;
-    Defer<QueueSize, std::string, UUID> losts;
-
-
     double timerPeriod(size_t ms);
-    void discover(const std::string& key, Watch&& watch);
     void onTimer(size_t);
     void onPayload(int fd, const Payload& data);
     void onConnect(int fd);

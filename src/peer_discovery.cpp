@@ -46,18 +46,6 @@ ConnState() : fd(0), version(0), isFetch(false)
 
 
 /******************************************************************************/
-/* WATCH                                                                      */
-/******************************************************************************/
-
-PeerDiscovery::Watch::
-Watch(WatchFn watch) : watch(std::move(watch))
-{
-    static std::atomic<WatchHandle> handleCounter{0};
-    handle = ++handleCounter;
-}
-
-
-/******************************************************************************/
 /* PROTOCOL                                                                   */
 /******************************************************************************/
 
@@ -94,28 +82,14 @@ PeerDiscovery(const std::vector<Address>& seeds, Port port) :
     myNode = networkInterfaces(true);
     for (auto& addr : myNode) addr.port = port;
 
+    ThreadAwareDiscovery::init(poller);
+
     using namespace std::placeholders;
 
     endpoint.onPayload = bind(&PeerDiscovery::onPayload, this, _1, _2);
     endpoint.onNewConnection = bind(&PeerDiscovery::onConnect, this, _1);
     endpoint.onLostConnection = bind(&PeerDiscovery::onDisconnect, this, _1);
     poller.add(endpoint);
-
-    retracts.onOperation = std::bind(&PeerDiscovery::retract, this, _1);
-    poller.add(retracts);
-
-    publishes.onOperation = std::bind(&PeerDiscovery::publish, this, _1, _2);
-    poller.add(publishes);
-
-    typedef void (PeerDiscovery::*DiscoverFn) (const std::string&, Watch&&);
-    discovers.onOperation = std::bind((DiscoverFn) &PeerDiscovery::discover, this, _1, _2);
-    poller.add(discovers);
-
-    forgets.onOperation = std::bind(&PeerDiscovery::forget, this, _1, _2);
-    poller.add(forgets);
-
-    losts.onOperation = std::bind(&PeerDiscovery::lost, this, _1, _2);
-    poller.add(losts);
 
     timer.onTimer = bind(&PeerDiscovery::onTimer, this, _1);
     poller.add(timer);
@@ -142,21 +116,8 @@ void
 PeerDiscovery::
 poll(size_t timeoutMs)
 {
-    isPollThread.set();
     poller.poll(timeoutMs);
 }
-
-void
-PeerDiscovery::
-stopPolling()
-{
-    ThreadAwarePollable::stopPolling();
-    retracts.poll();
-    publishes.poll();
-    discovers.poll();
-    forgets.poll();
-}
-
 
 void
 PeerDiscovery::
@@ -186,27 +147,11 @@ onPayload(int fd, const Payload& data)
     }
 }
 
-
-Discovery::WatchHandle
-PeerDiscovery::
-discover(const std::string& key, const WatchFn& fn)
-{
-    Watch watch(fn);
-    auto handle = watch.handle;
-    discover(key, std::move(watch));
-    return handle;
-}
-
 void
 PeerDiscovery::
-discover(const std::string& key, Watch&& watch)
+discoverImpl(const std::string& key, WatchHandle handle, const WatchFn& watch)
 {
-    if (!isPollThread()) {
-        discovers.defer(key, std::move(watch));
-        return;
-    }
-
-    print(myId, "wtch", key, watch.handle);
+    print(myId, "wtch", key, handle);
 
     if (!watches.count(key)) {
         std::vector<QueryItem> items = { key };
@@ -214,7 +159,7 @@ discover(const std::string& key, Watch&& watch)
         endpoint.multicast(edges, packAll(Msg::Query, myNode, items));
     }
 
-    watches[key].insert(std::move(watch));
+    watches[key].insert(Watch(handle, watch));
 
     auto it = keys.find(key);
     if (it == keys.end()) return;
@@ -225,13 +170,8 @@ discover(const std::string& key, Watch&& watch)
 
 void
 PeerDiscovery::
-forget(const std::string& key, WatchHandle handle)
+forgetImpl(const std::string& key, WatchHandle handle)
 {
-    if (!isPollThread()) {
-        forgets.defer(key, handle);
-        return;
-    }
-
     auto it = watches.find(key);
     if (it == watches.end()) return;
 
@@ -246,13 +186,8 @@ forget(const std::string& key, WatchHandle handle)
 
 void
 PeerDiscovery::
-lost(const std::string& key, const UUID& keyId)
+lostImpl(const std::string& key, const UUID& keyId)
 {
-    if (!isPollThread()) {
-        losts.defer(key, keyId);
-        return;
-    }
-
     auto it = keys.find(key);
     if (it == keys.end()) return;
 
@@ -265,14 +200,9 @@ lost(const std::string& key, const UUID& keyId)
 
 void
 PeerDiscovery::
-publish(const std::string& key, Payload&& data)
+publishImpl(const std::string& key, Payload&& data)
 {
     assert(data);
-
-    if (!isPollThread()) {
-        publishes.defer(key, std::move(data));
-        return;
-    }
 
     Data item(std::move(data));
     print(myId, "publ", key, item.id, item.data);
@@ -289,13 +219,8 @@ publish(const std::string& key, Payload&& data)
 
 void
 PeerDiscovery::
-retract(const std::string& key)
+retractImpl(const std::string& key)
 {
-    if (!isPollThread()) {
-        retracts.defer(key);
-        return;
-    }
-
     data.erase(key);
 }
 

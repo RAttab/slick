@@ -110,6 +110,7 @@ add_library(
     src/address.cpp
     src/socket.cpp
     src/endpoint.cpp
+    src/discovery.cpp
     src/peer_discovery.cpp
     src/named_endpoint.cpp)
 

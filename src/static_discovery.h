@@ -22,7 +22,7 @@ namespace slick {
 /* STATIC DISCOVERY                                                           */
 /******************************************************************************/
 
-struct StaticDiscovery
+struct StaticDiscovery : public Discovery
 {
     enum {
         DefaultPort = 19999,
