@@ -26,7 +26,7 @@ namespace slick {
 /* ENDPOINT PROVIDER                                                          */
 /******************************************************************************/
 
-struct Endpoint
+struct Endpoint : public ThreadAwarePollable
 {
     Endpoint();
     Endpoint(Port listenPort);
@@ -49,7 +49,7 @@ struct Endpoint
 
     int fd() const { return poller.fd(); }
     void poll(int timeoutMs = 0);
-    void shutdown();
+    void stopPolling();
 
     void listen(Port listenPort);
 
@@ -108,7 +108,6 @@ private:
 
 
     Epoll poller;
-    IsPollThread isPollThread;
 
     struct ConnectionState
     {

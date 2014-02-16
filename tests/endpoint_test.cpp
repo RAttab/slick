@@ -186,9 +186,6 @@ BOOST_AUTO_TEST_CASE(n_to_n)
     provPoller.join();
     clientPoller.join();
 
-    client.shutdown();
-    for (auto& prov : providers) prov->shutdown();
-
     for (size_t i = 0; i < N; ++i)
         BOOST_CHECK_EQUAL(clientIdSums[i], 1);
 }

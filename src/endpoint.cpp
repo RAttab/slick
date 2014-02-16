@@ -89,13 +89,11 @@ Endpoint::
 
 void
 Endpoint::
-shutdown()
+stopPolling()
 {
-    isPollThread.unset();
+    ThreadAwarePollable::stopPolling();
 
     doDisconnect(std::move(disconnectQueue));
-
-    // flush any pending ops.
     sends.poll();
     broadcasts.poll();
     connects.poll();
@@ -121,8 +119,6 @@ void
 Endpoint::
 poll(int timeoutMs)
 {
-    isPollThread.set(); // \todo This is a bit flimsy
-
     while(poller.poll(timeoutMs)) {
 
         struct epoll_event ev = poller.next();

@@ -27,7 +27,7 @@ struct NamedEndpoint : public Endpoint
 
     int fd() const { return poller.fd(); }
     void poll(int timeoutMs = 0);
-    void shutdown();
+    void stopPolling();
 
     void listen(std::string key, Port listenPort, Payload&& data);
     void listen(std::string key, Port listenPort, const Payload& data)

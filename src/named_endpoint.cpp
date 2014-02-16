@@ -37,7 +37,6 @@ NamedEndpoint(Discovery& discovery) :
 NamedEndpoint::
 ~NamedEndpoint()
 {
-    shutdown();
 }
 
 void
@@ -58,15 +57,13 @@ poll(int timeoutMs)
 
 void
 NamedEndpoint::
-shutdown()
+stopPolling()
 {
-    isPollThread.unset();
+    Endpoint::stopPolling();
 
     if (!name.empty()) discovery.retract(name);
     for (auto watch : activeWatches)
         discovery.forget(watch.second.key, watch.first);
-
-    Endpoint::shutdown();
 }
 
 void
