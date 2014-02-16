@@ -48,11 +48,14 @@ struct Peers
     bool test(int fd) const;
     PeerId id(int fd) const;
 
+    template<typename OtherData>
+    PeerId transfer(PeerId id, Peers<OtherData>& other);
+
     size_t peers() const;
     size_t connections() const;
 
     bool connected(PeerId id) const;
-    const NodeAddress& addr(PeerId Id) const;
+    const NodeAddress& addr(PeerId id) const;
     ConnectionData& data(PeerId id);
     const ConnectionData& data(PeerId id) const;
 
@@ -65,7 +68,7 @@ struct Peers
 
     int fd() const { poller.fd; }
     void poll(size_t timeoutMs = 0) { poller.poll(timeoutMs); }
-    void shutdown();
+    void stopPolling();
 
 private:
 
@@ -79,6 +82,8 @@ private:
         Peer(PeerId id = 0, NodeAddress addr = {}) :
             id(id), fd(-1), addr(std::move(addr)), lastWaitMs(0)
         {}
+
+        bool connected() const { return fd > 0; }
     };
 
     struct Connection
@@ -91,7 +96,6 @@ private:
             fd(fd), id(id)
         {}
 
-        bool connected() const { return fd > 0; }
     };
 
 
@@ -120,6 +124,9 @@ private:
     const Connection& connection(PeerId id) const;
 
     void connectPeer(Peer& peer);
+
+    size_t connectionsTargetSize() const;
+    void addRotateDeadline(PeerId id);
 
     void onTimer(uint64_t);
     void onTimeout(PeerId);

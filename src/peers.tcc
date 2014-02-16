@@ -48,7 +48,7 @@ Peers<Data>::
 template<typename Data>
 void
 Peers<Data>::
-shutdown()
+stopPolling()
 {
 }
 
@@ -230,7 +230,10 @@ add(NodeAddress addr)
     PeerId id = ++idCounter;
 
     Peer peer(id, std::move(addr));
-    connectPeer(peer);
+
+    if (connections.size() < connectionsTargetSize())
+        connectPeer(peer);
+
     peers[id] = std::move(peer);
 
     return id;
@@ -253,6 +256,51 @@ remove(PeerId id)
 }
 
 template<typename Data>
+template<typename OtherData>
+PeerId
+Peers<Data>::
+transfer(PeerId id, Peers<OtherData>& other)
+{
+    typedef Peers<OtherData>::Peer OtherPeer;
+    typedef Peers<OtherData>::Connection OtherConnenction;
+
+    Peer peer = std::move(peer(id));
+    peers.erase(id);
+
+    PeerId otherId = ++other.idCounter;
+    auto ret = other.peers.emplace(otherId, Peer(otherId, std::move(peer.addr)));
+    OtherPeer& otherPeer = *ret.first;
+
+    if (peer.connected()) {
+        otherPeer.fd = peer.fd;
+
+        Connection conn = std::move(connetions[peer.fd]);
+        connections.erase(peer.fd);
+
+        auto ret = other.connections.emplace(peer.fd, OtherConnection(peer.fd, otherId));
+        auto& otherConn = *ret.first;
+
+        otherConn.data = OtherData(std::move(conn.data));
+        if (model == Rotate) other.addRotateDeadline(otherId);
+    }
+
+    else if (connections.size() < connectionsTargetSize())
+        other.connectPeer(otherPeer);
+
+    return otherId;
+}
+
+template<typename Data>
+void
+Peers<Data>::
+addRotateDeadline(PeerId id)
+{
+    size_t waitMs = period_ * 1000;
+    waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
+    deadlines.setTTL(conn.id, waitMs);
+}
+
+template<typename Data>
 void
 Peers<Data>::
 notifyConnect(int fd)
@@ -267,11 +315,7 @@ notifyConnect(int fd)
     broadcastFds.insert(fd);
     peerIt->second.lastWaitMs = 0;
 
-    if (model == Rotate) {
-        size_t waitMs = period_ * 1000;
-        waitMs *= 1 + std::geometric_distribution<size_t>(0.2)(rng);
-        deadlines.setTTL(conn.id, waitMs);
-    }
+    if (model == Rotate) addRotateDeadline(conn.id);
 
     if (onConnect) onConnect(conn.id);
 }
@@ -333,6 +377,14 @@ disconnect(PeerId id)
 }
 
 template<typename Data>
+size_t
+Peers<Data>::
+connectionsTargetSize() const
+{
+    return model == Rotate ? lockless::log2(peers.size()) : peers.size();
+}
+
+template<typename Data>
 void
 Peers<Data>::
 topupConnections()
@@ -341,7 +393,7 @@ topupConnections()
 
     double now = lockless::wall();
 
-    size_t targetSize = lockless::log2(peers.size());
+    size_t targetSize = connectionsTargetSize();
     if (targetSize < connections.size()) return;
 
     size_t connects = targetSize - connections.size();
