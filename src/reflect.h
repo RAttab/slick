@@ -7,6 +7,9 @@
 
 #pragma once
 
+#include <function>
+#include <cstddef>
+
 namespace slick {
 
 struct Reflection;
@@ -18,7 +21,6 @@ struct ReflectionRegistry;
 /******************************************************************************/
 
 template<typename T> struct ReflectionId;
-template<typename T> struct CreateReflection;
 
 struct ReflectionRegistry
 {
@@ -29,12 +31,7 @@ struct ReflectionRegistry
     }
     static Reflection* get(const std::string& id);
 
-    template<typename T>
-    static void add()
-    {
-        add(ReflectionId<T>::value, CreateReflection<T>::create());
-    };
-    static void add(std::string id, Reflection* reflection)
+    static void add(Reflection* reflection)
 };
 
 
@@ -245,6 +242,20 @@ struct Function
         return *reinterpret_cast<Fn*>(&fn)(args...);
     }
 
+    Reflection* returnType() const { return ret; }
+    size_t size() const { return args.size(); }
+    Reflection* operator[] (size_t i) const { return args[i]; }
+
+    bool isGetter() const
+    {
+        return ret != GetReflection<void>::get() && args.empty();
+    }
+
+    bool isSetter() const
+    {
+        return ret == GetReflection<void>::get() && args.size() == 1;
+    }
+
 private:
 
     template<typename Arg>
@@ -292,6 +303,9 @@ private:
 
 struct Functions
 {
+
+    size_t size() const { return overloads.size(); }
+    Function& operator[] (size_t i) const { return overloads[i]; }
 
     bool test(Function fn)
     {
@@ -364,7 +378,6 @@ struct Reflection
     Reflection& operator=(const Reflection&) = delete;
 
 
-
 private:
 
     std::string id;
@@ -372,5 +385,53 @@ private:
 
     std::unordered_map<std::string, Functions> fields;
 };
+
+
+/******************************************************************************/
+/* MACROS                                                                     */
+/******************************************************************************/
+
+#define SLICK_REFLECT_NAME(_prefix_,_class_,_ns_)       \
+    _prefix_ ## _ ## _ns_ ## _ ## _class_
+
+#define SLICK_REFLECT_TYPE(_class_,_ns_)       \
+    _ns_ ## :: ## _class_
+
+#define SLICK_REFLECT_ID(_class_,_ns_)          \
+    #SLICK_REFLECT_NAME(id,_class_,_ns_)
+
+
+#define SLICK_REFLECT_REGISTER(_class_,_ns_)                            \
+    struct SLICK_REFLECT_NAME(Register,_class_,_ns_)                    \
+    {                                                                   \
+        SLICK_REFLECT_NAME(Register,_class_,_ns_)()                     \
+        {                                                               \
+            std::string id = SLICK_REFLECT_ID(_class_,_ns_);            \
+            ReflectionRegistry::add(new Reflection(id));                \
+            SLICK_REFLECT_NAME(init,_class_,_ns_)();                    \
+        }                                                               \
+    } SLICK_REFLECT_NAME(register,_class_,_ns_);
+
+
+#define SLICK_REFLECT_ID_CLASS(_class_,_ns_)                    \
+    template<>                                                  \
+    struct ReflectionId<SLICK_REFLECT_TYPE(_class_,_ns_)>       \
+    {                                                           \
+        static constexpr std::string value =                    \
+            SLICK_REFLECT_ID(_class_,_ns_);                     \
+    };
+    
+
+#define SLICK_REFLECT(_class_,_ns_)                                     \
+    namespace slick { namespace reflect {                               \
+    void SLICK_REFLECT_NAME(init,_class_,_ns_)();                       \
+    SLICK_REFLECT_ID_CLASS(_class_,_ns_)                                \
+    SLICK_REFLECT_REGISTER(_class_,_ns_)                                \
+    }}                                                                  \
+    void slick::reflect::SLICK_REFLECT_NAME(init,_class_,_ns_)()
+
+            
+
+
 
 } // slick
